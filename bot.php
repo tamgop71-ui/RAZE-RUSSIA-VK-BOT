@@ -4,6 +4,31 @@ $token=trim((string)getenv('VK_TOKEN')); $groupId=(int)getenv('VK_GROUP_ID');
 $ownerIds=array_values(array_filter(array_map('intval',preg_split('/[,;\s]+/',trim((string)getenv('OWNER_IDS'))?:''))));
 date_default_timezone_set(trim((string)getenv('TZ'))?:'Europe/Moscow');
 if($token===''||$groupId<=0){fwrite(STDERR,"ERROR: set VK_TOKEN and VK_GROUP_ID\n");exit(1);}
+
+function startupCheck():void{
+    global $groupId;
+    $r=vk('groups.getById',['group_id'=>$groupId]);
+    if(isset($r['error'])){fwrite(STDERR,"VK getById ERROR: ".json_encode($r['error'],JSON_UNESCAPED_UNICODE)."\n");return;}
+    $g=$r['response']['groups'][0]??[];
+    fwrite(STDOUT,"VK group: ".($g['name']??'unknown')." (#".$groupId.")\n");
+    $settings=vk('groups.setLongPollSettings',[
+        'group_id'=>$groupId,
+        'api_version'=>'5.199',
+        'enabled'=>1,
+        'message_new'=>1,
+        'message_reply'=>0,
+        'message_allow'=>0,
+        'message_deny'=>0,
+        'message_edit'=>0,
+        'message_event'=>0,
+        'message_typing_state'=>0,
+        'message_reaction_event'=>0,
+        'message_reaction_new'=>0,
+        'message_reaction_remove'=>0
+    ]);
+    if(isset($settings['error'])) fwrite(STDERR,"Long Poll settings ERROR: ".json_encode($settings['error'],JSON_UNESCAPED_UNICODE)."\n");
+    else fwrite(STDOUT,"Long Poll: message_new enabled\n");
+}
 $dbPath=__DIR__.'/data/raze.sqlite'; if(!is_dir(dirname($dbPath)))mkdir(dirname($dbPath),0775,true);
 $pdo=new PDO('sqlite:'.$dbPath,null,null,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
 $pdo->exec('PRAGMA journal_mode=WAL'); $pdo->exec('PRAGMA busy_timeout=5000');
@@ -19,14 +44,14 @@ CREATE TABLE IF NOT EXISTS reports(id INTEGER PRIMARY KEY AUTOINCREMENT,peer_id 
 CREATE TABLE IF NOT EXISTS report_messages(id INTEGER PRIMARY KEY AUTOINCREMENT,report_id INTEGER NOT NULL,user_id INTEGER NOT NULL,text TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);");
 $pdo->exec("INSERT OR IGNORE INTO roles(id,name,priority) VALUES(1,'Участник',0),(2,'Помощник',20),(3,'Модератор',40),(4,'Администратор',60),(5,'Ст. администратор',80),(6,'Владелец',100)");
 function vk(string $m,array $p=[]):array{global $token;$p['access_token']=$token;$p['v']='5.199';$u='https://api.vk.com/method/'.$m.'?'.http_build_query($p);$c=stream_context_create(['http'=>['timeout'=>35,'ignore_errors'=>true]]);$r=@file_get_contents($u,false,$c);return $r===false?['error'=>['error_msg'=>'VK API request failed']]:((json_decode($r,true)?:['error'=>['error_msg'=>'Invalid VK response']]));}
-function sendMessage(int $peer,string $text,?int $reply=null):void{$p=['peer_id'=>$peer,'random_id'=>random_int(-2147483648,2147483647),'message'=>$text];if($reply)$p['reply_to']=$reply;vk('messages.send',$p);}
+function sendMessage(int $peer,string $text,?int $reply=null):void{$p=['peer_id'=>$peer,'random_id'=>random_int(-2147483648,2147483647),'message'=>$text];if($reply)$p['reply_to']=$reply;$r=vk('messages.send',$p);if(isset($r['error']))fwrite(STDERR,"SEND ERROR: ".json_encode($r['error'],JSON_UNESCAPED_UNICODE)."\n");else fwrite(STDOUT,"SENT to {$peer}\n");}
 function ensureUser(PDO $p,int $peer,int $user):void{$s=$p->prepare("INSERT INTO chat_users(peer_id,user_id,role_id) VALUES(?,?,1) ON CONFLICT(peer_id,user_id) DO UPDATE SET last_seen=CURRENT_TIMESTAMP");$s->execute([$peer,$user]);}
 function pri(PDO $p,int $peer,int $user):int{$s=$p->prepare('SELECT r.priority FROM chat_users u JOIN roles r ON r.id=u.role_id WHERE u.peer_id=? AND u.user_id=?');$s->execute([$peer,$user]);return(int)($s->fetchColumn()?:0);}
 function target(array $o,array $a):?int{if(isset($o['reply_message']['from_id']))return abs((int)$o['reply_message']['from_id']);if(!empty($a[0])&&preg_match('/^\[id(\d+)\|/i',$a[0],$m))return(int)$m[1];if(!empty($a[0])&&preg_match('/^(?:id)?(\d+)$/i',$a[0],$m))return(int)$m[1];return null;}
 function parts(string $t):array{$t=trim($t);if($t==='')return['',[]];$t=preg_replace('/^[!\/.]+/u','',$t);$a=preg_split('/\s+/u',$t);return[mb_strtolower((string)array_shift($a)),$a];}
 function loga(PDO $p,int $peer,int $actor,?int $target,string $action,string $details=''):void{$s=$p->prepare('INSERT INTO logs(peer_id,actor_id,target_id,action,details) VALUES(?,?,?,?,?)');$s->execute([$peer,$actor,$target,$action,$details]);}
 function expire(PDO $p):void{$p->exec("UPDATE bans SET active=0 WHERE active=1 AND expires_at IS NOT NULL AND expires_at<=datetime('now')");$p->exec("UPDATE mutes SET active=0 WHERE active=1 AND expires_at IS NOT NULL AND expires_at<=datetime('now')");}
-function handle(PDO $p,array $o):void{global $ownerIds;$peer=(int)($o['peer_id']??0);$from=(int)($o['from_id']??0);$text=trim((string)($o['text']??''));if(!$peer||!$from)return;ensureUser($p,$peer,$from);expire($p);[$cmd,$a]=parts($text);if($cmd==='')return;$level=pri($p,$peer,$from);if(in_array($from,$ownerIds,true))$level=100;$need=['пинг'=>0,'ping'=>0,'myid'=>0,'id'=>0,'помощь'=>0,'help'=>0,'start'=>0,'команды'=>0,'commands'=>0,'правила'=>0,'rules'=>0,'роли'=>0,'roles'=>0,'админы'=>0,'admins'=>0,'онлайн'=>0,'online'=>0,'сник'=>20,'ник'=>20,'рник'=>20,'пред'=>20,'варн'=>20,'унварн'=>20,'мут'=>20,'унмут'=>20,'бан'=>40,'унбан'=>40,'кик'=>20,'роль'=>60,'снятьроль'=>60];if(!isset($need[$cmd]))return;$reply=(int)($o['conversation_message_id']??0)?:null;if($level<$need[$cmd]){sendMessage($peer,'❌ Недостаточно прав.',$reply);return;}
+function handle(PDO $p,array $o):void{global $ownerIds;$peer=(int)($o['peer_id']??0);$from=(int)($o['from_id']??0);$text=trim((string)($o['text']??''));fwrite(STDOUT,"EVENT message_new peer={$peer} from={$from} text=".json_encode($text,JSON_UNESCAPED_UNICODE)."\n");if(!$peer||!$from)return;ensureUser($p,$peer,$from);expire($p);[$cmd,$a]=parts($text);if($cmd==='')return;$level=pri($p,$peer,$from);if(in_array($from,$ownerIds,true))$level=100;$need=['пинг'=>0,'ping'=>0,'myid'=>0,'id'=>0,'помощь'=>0,'help'=>0,'start'=>0,'команды'=>0,'commands'=>0,'правила'=>0,'rules'=>0,'роли'=>0,'roles'=>0,'админы'=>0,'admins'=>0,'онлайн'=>0,'online'=>0,'сник'=>20,'ник'=>20,'рник'=>20,'пред'=>20,'варн'=>20,'унварн'=>20,'мут'=>20,'унмут'=>20,'бан'=>40,'унбан'=>40,'кик'=>20,'роль'=>60,'снятьроль'=>60];if(!isset($need[$cmd]))return;$reply=(int)($o['conversation_message_id']??0)?:null;if($level<$need[$cmd]){sendMessage($peer,'❌ Недостаточно прав.',$reply);return;}
 switch($cmd){case'пинг':case'ping':sendMessage($peer,'🏓 RAZE RUSSIA BOT: онлайн',$reply);break;case'myid':case'id':sendMessage($peer,"🆔 Ваш VK ID: {$from}",$reply);break;case'помощь':case'help':case'start':case'команды':case'commands':sendMessage($peer,"RAZE RUSSIA — команды\n!пинг !myid !правила !роли !админы !онлайн\n!сник !ник !рник\n!пред !унварн !мут !унмут\n!бан !унбан !кик\n!роль !снятьроль",$reply);break;case'онлайн':case'online':sendMessage($peer,'🟢 Бот онлайн.',$reply);break;case'роли':case'roles':$rows=$p->query('SELECT name,priority FROM roles ORDER BY priority DESC')->fetchAll();$s='👑 Роли:\n';foreach($rows as $r)$s.="• {$r['name']} — {$r['priority']}\n";sendMessage($peer,$s,$reply);break;case'админы':case'admins':$q=$p->prepare("SELECT u.user_id,r.name FROM chat_users u JOIN roles r ON r.id=u.role_id WHERE u.peer_id=? AND r.priority>0 ORDER BY r.priority DESC");$q->execute([$peer]);$s='👮 Администрация:\n';foreach($q as $r)$s.="• [id{$r['user_id']}|VK {$r['user_id']}] — {$r['name']}\n";sendMessage($peer,$s,$reply);break;case'правила':case'rules':$q=$p->prepare('SELECT rules FROM chat_settings WHERE peer_id=?');$q->execute([$peer]);sendMessage($peer,(string)($q->fetchColumn()?:'Правила ещё не настроены.'),$reply);break;
 case'сник':case'ник':$t=target($o,$a);$nick=$t?implode(' ',array_slice($a,1)):implode(' ',$a);if(!$t){$t=$from;}$nick=trim($nick);if($nick===''){sendMessage($peer,'Использование: !сник Ник или ответом на сообщение.',$reply);break;}$q=$p->prepare('INSERT INTO nicknames(peer_id,user_id,nickname) VALUES(?,?,?) ON CONFLICT(peer_id,user_id) DO UPDATE SET nickname=excluded.nickname');$q->execute([$peer,$t,$nick]);loga($p,$peer,$from,$t,'nickname',$nick);sendMessage($peer,"✅ Ник установлен: {$nick}",$reply);break;
 case'рник':$t=target($o,$a)??$from;$p->prepare('DELETE FROM nicknames WHERE peer_id=? AND user_id=?')->execute([$peer,$t]);loga($p,$peer,$from,$t,'remove_nickname');sendMessage($peer,'✅ Ник удалён.',$reply);break;
@@ -41,4 +66,5 @@ case'роль':$t=target($o,$a);$role=trim(implode(' ',array_slice($a,$t?1:0)));
 case'снятьроль':$t=target($o,$a)??$from;$p->prepare('UPDATE chat_users SET role_id=1 WHERE peer_id=? AND user_id=?')->execute([$peer,$t]);loga($p,$peer,$from,$t,'remove_role');sendMessage($peer,'✅ Роль снята.',$reply);break;}}
 function lp():array{global $groupId;for($i=0;$i<5;$i++){ $r=vk('groups.getLongPollServer',['group_id'=>$groupId]);if(isset($r['response']))return$r['response'];sleep(2);}throw new RuntimeException('Cannot get VK Long Poll server');}
 fwrite(STDOUT,"RAZE RUSSIA VK BOT started (Bothost / Long Poll).\n");
+startupCheck();
 while(true){try{$s=lp();$key=$s['key'];$server=$s['server'];$ts=$s['ts'];while(true){$u=$server.'?act=a_check&key='.rawurlencode($key).'&wait=25&ts='.rawurlencode($ts);$c=stream_context_create(['http'=>['timeout'=>35,'ignore_errors'=>true]]);$r=@file_get_contents($u,false,$c);if($r===false)throw new RuntimeException('Long Poll connection failed');$d=json_decode($r,true);if(!is_array($d))throw new RuntimeException('Invalid Long Poll response');if(isset($d['ts']))$ts=$d['ts'];if(isset($d['failed']))break;foreach(($d['updates']??[])as$x){if(($x['type']??'')!=='message_new')continue;$obj=$x['object']??[];if(isset($obj['message'])&&is_array($obj['message']))$obj=$obj['message'];handle($pdo,$obj);}}}catch(Throwable$e){fwrite(STDERR,'WARN: '.$e->getMessage()."\n");sleep(3);}}
