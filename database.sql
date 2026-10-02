@@ -1,0 +1,132 @@
+SET NAMES utf8mb4;
+
+CREATE TABLE IF NOT EXISTS roles (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(64) NOT NULL,
+  priority INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_role_priority (priority)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO roles (id,name,priority) VALUES
+(1,'Участник',0),(2,'Помощник',20),(3,'Модератор',40),
+(4,'Администратор',60),(5,'Ст. администратор',80),(6,'Владелец',100);
+
+CREATE TABLE IF NOT EXISTS chat_users (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  peer_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  role_id INT UNSIGNED NOT NULL DEFAULT 1,
+  nickname VARCHAR(100) NULL,
+  immunity TINYINT(1) NOT NULL DEFAULT 0,
+  last_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_chat_user(peer_id,user_id),
+  KEY idx_user(user_id),
+  CONSTRAINT fk_chat_role FOREIGN KEY(role_id) REFERENCES roles(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS chat_settings (
+  peer_id BIGINT NOT NULL PRIMARY KEY,
+  rules TEXT NULL,
+  welcome TEXT NULL,
+  log_peer_id BIGINT NULL,
+  silence_until DATETIME NULL,
+  games_enabled TINYINT(1) NOT NULL DEFAULT 0,
+  automod_enabled TINYINT(1) NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS warnings (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  peer_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  moderator_id BIGINT NOT NULL,
+  reason VARCHAR(500) NOT NULL,
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(id),
+  KEY idx_warn(peer_id,user_id,active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS bans (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  peer_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  moderator_id BIGINT NOT NULL,
+  days INT NOT NULL,
+  reason VARCHAR(500) NOT NULL,
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NULL,
+  PRIMARY KEY(id),
+  KEY idx_ban(peer_id,user_id,active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS mutes (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  peer_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  moderator_id BIGINT NOT NULL,
+  minutes INT NOT NULL,
+  reason VARCHAR(500) NOT NULL,
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NULL,
+  PRIMARY KEY(id),
+  KEY idx_mute(peer_id,user_id,active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS logs (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  peer_id BIGINT NOT NULL,
+  actor_id BIGINT NOT NULL,
+  target_id BIGINT NULL,
+  action VARCHAR(64) NOT NULL,
+  details TEXT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(id),
+  KEY idx_log_peer(peer_id,created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS reports (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  peer_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  text TEXT NOT NULL,
+  status ENUM('open','working','closed') NOT NULL DEFAULT 'open',
+  moderator_id BIGINT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  closed_at DATETIME NULL,
+  PRIMARY KEY(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS report_messages (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  report_id BIGINT UNSIGNED NOT NULL,
+  user_id BIGINT NOT NULL,
+  text TEXT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(id),
+  KEY idx_report(report_id),
+  CONSTRAINT fk_report_message FOREIGN KEY(report_id) REFERENCES reports(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS nicknames (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  peer_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  nickname VARCHAR(100) NOT NULL,
+  set_by BIGINT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(id),
+  KEY idx_nick(peer_id,nickname)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS economy (
+  peer_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  balance BIGINT NOT NULL DEFAULT 0,
+  messages INT NOT NULL DEFAULT 0,
+  last_bonus DATETIME NULL,
+  PRIMARY KEY(peer_id,user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
