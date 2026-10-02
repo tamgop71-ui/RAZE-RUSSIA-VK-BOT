@@ -1,2 +1,2 @@
--- SQLite schema is created automatically by bot.php on first launch.
--- No MySQL/PostgreSQL service is required for this Bothost edition.
+-- SQLite schema is created and migrated automatically by bot.php.
+-- No MySQL/PostgreSQL database is required on Bothost.
