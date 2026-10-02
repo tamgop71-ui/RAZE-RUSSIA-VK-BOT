@@ -4,6 +4,7 @@ $token=trim((string)getenv('VK_TOKEN')); $groupId=(int)getenv('VK_GROUP_ID');
 $ownerIds=array_values(array_filter(array_map('intval',preg_split('/[,;\s]+/',trim((string)getenv('OWNER_IDS'))?:''))));
 date_default_timezone_set(trim((string)getenv('TZ'))?:'Europe/Moscow');
 if($token===''||$groupId<=0){fwrite(STDERR,"ERROR: set VK_TOKEN and VK_GROUP_ID\n");exit(1);}
+if(!extension_loaded('pdo_sqlite')){fwrite(STDERR,"ERROR: pdo_sqlite extension is not loaded\n");exit(1);}
 
 function startupCheck():void{
     global $groupId;
@@ -44,7 +45,14 @@ CREATE TABLE IF NOT EXISTS reports(id INTEGER PRIMARY KEY AUTOINCREMENT,peer_id 
 CREATE TABLE IF NOT EXISTS report_messages(id INTEGER PRIMARY KEY AUTOINCREMENT,report_id INTEGER NOT NULL,user_id INTEGER NOT NULL,text TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);");
 $pdo->exec("INSERT OR IGNORE INTO roles(id,name,priority) VALUES(1,'Участник',0),(2,'Помощник',20),(3,'Модератор',40),(4,'Администратор',60),(5,'Ст. администратор',80),(6,'Владелец',100)");
 function vk(string $m,array $p=[]):array{global $token;$p['access_token']=$token;$p['v']='5.199';$u='https://api.vk.com/method/'.$m.'?'.http_build_query($p);$c=stream_context_create(['http'=>['timeout'=>35,'ignore_errors'=>true]]);$r=@file_get_contents($u,false,$c);return $r===false?['error'=>['error_msg'=>'VK API request failed']]:((json_decode($r,true)?:['error'=>['error_msg'=>'Invalid VK response']]));}
-function sendMessage(int $peer,string $text,?int $reply=null):void{$p=['peer_id'=>$peer,'random_id'=>random_int(-2147483648,2147483647),'message'=>$text];if($reply)$p['reply_to']=$reply;$r=vk('messages.send',$p);if(isset($r['error']))fwrite(STDERR,"SEND ERROR: ".json_encode($r['error'],JSON_UNESCAPED_UNICODE)."\n");else fwrite(STDOUT,"SENT to {$peer}\n");}
+function sendMessage(int $peer,string $text,?int $reply=null):void{
+    // Deliberately do not send reply_to: VK may reject stale/invalid message IDs
+    // with error 100 "forwarded message not found". We send a normal message.
+    $p=['peer_id'=>$peer,'random_id'=>random_int(-2147483648,2147483647),'message'=>$text];
+    $r=vk('messages.send',$p);
+    if(isset($r['error'])) fwrite(STDERR,"SEND ERROR: ".json_encode($r['error'],JSON_UNESCAPED_UNICODE)."\n");
+    else fwrite(STDOUT,"SENT to {$peer}\n");
+}
 function ensureUser(PDO $p,int $peer,int $user):void{$s=$p->prepare("INSERT INTO chat_users(peer_id,user_id,role_id) VALUES(?,?,1) ON CONFLICT(peer_id,user_id) DO UPDATE SET last_seen=CURRENT_TIMESTAMP");$s->execute([$peer,$user]);}
 function pri(PDO $p,int $peer,int $user):int{$s=$p->prepare('SELECT r.priority FROM chat_users u JOIN roles r ON r.id=u.role_id WHERE u.peer_id=? AND u.user_id=?');$s->execute([$peer,$user]);return(int)($s->fetchColumn()?:0);}
 function target(array $o,array $a):?int{if(isset($o['reply_message']['from_id']))return abs((int)$o['reply_message']['from_id']);if(!empty($a[0])&&preg_match('/^\[id(\d+)\|/i',$a[0],$m))return(int)$m[1];if(!empty($a[0])&&preg_match('/^(?:id)?(\d+)$/i',$a[0],$m))return(int)$m[1];return null;}
