@@ -99,7 +99,29 @@ function parseCommand(string $t):array{
     if(isset($aliases[$cmd]))$cmd=$aliases[$cmd];
     return[$cmd,$a];
 }
-function target(array $o,array $a):?int{if(isset($o['reply_message']['from_id']))return abs((int)$o['reply_message']['from_id']);if(!empty($a[0])&&preg_match('/^\[id(\d+)\|/i',$a[0],$m))return(int)$m[1];if(!empty($a[0])&&preg_match('/^(?:id)?(\d+)$/i',$a[0],$m))return(int)$m[1];if(!empty($a[0])&&preg_match('/(?:vk\.com\/id|id)(\d+)/i',$a[0],$m))return(int)$m[1];return null;}
+function target(array $o,array $a):?int{
+ // Ответ на сообщение — самый надёжный способ указать пользователя.
+ foreach(['reply_message','reply'] as $rk){
+  if(isset($o[$rk])&&is_array($o[$rk])){
+   $rid=(int)($o[$rk]['from_id']??$o[$rk]['user_id']??0);
+   if($rid!==0)return abs($rid);
+  }
+ }
+ $v=trim((string)($a[0]??''));
+ if($v==='')return null;
+ $patterns=[
+  '/^\[id(\d+)\|/iu',
+  '/^@?id(\d+)$/iu',
+  '/^@?(\d+)$/u',
+  '/^@?https?:\/\/vk\.com\/id(\d+)\/?$/iu',
+  '/^@?vk\.com\/id(\d+)\/?$/iu',
+  '/^@id(\d+)$/iu'
+ ];
+ foreach($patterns as $re){if(preg_match($re,$v,$m))return abs((int)$m[1]);}
+ // Вставленная VK-ссылка/упоминание может содержать текст после ID.
+ if(preg_match('/(?:vk\.com\/id|\[id|@id)(\d+)/iu',$v,$m))return abs((int)$m[1]);
+ return null;
+}
 function nameOf(int $uid):string{$r=vk('users.get',['user_ids'=>$uid,'fields'=>'first_name,last_name']);$u=$r['response'][0]??[];return trim(($u['first_name']??'').' '.($u['last_name']??''))?:"ID {$uid}";}
 function targetName(int $uid):string{return nameOf($uid);}
 function ensureEconomy(PDO $p,int $peer,int $uid):void{$p->prepare('INSERT OR IGNORE INTO economy(peer_id,user_id) VALUES(?,?)')->execute([$peer,$uid]);}
@@ -226,8 +248,40 @@ function handle(PDO $p,array $o):void{
  case 'предупреждения':case'getwarns':$t=$target??(int)($a[0]??0);$q=$p->prepare('SELECT COUNT(*) FROM warnings WHERE peer_id=? AND user_id=? AND active=1');$q->execute([$peer,$t]);sendMessage($peer,'⚠️ Активных предупреждений: '.$q->fetchColumn());break;case'getwarn':$t=$target??(int)($a[0]??0);$q=$p->prepare('SELECT moderator_id,reason,created_at FROM warnings WHERE peer_id=? AND user_id=? ORDER BY id DESC');$q->execute([$peer,$t]);$s='⚠️ Предупреждения '.nameOf($t).":\n";$i=1;foreach($q as $r)$s.=$i++.'. Выдал: '.nameOf((int)$r['moderator_id']).' | '.$r['reason'].' | '.$r['created_at']."\n";sendMessage($peer,$s);break;case'getban':$t=$target??(int)($a[0]??0);$q=$p->prepare('SELECT moderator_id,days,reason,created_at,expires_at,active FROM bans WHERE peer_id=? AND user_id=? ORDER BY id DESC');$q->execute([$peer,$t]);$s='🔨 Баны '.nameOf($t).":\n";foreach($q as $r)$s.='• '.($r['active']?'активен':'снят').' | выдал '.nameOf((int)$r['moderator_id']).' | '.$r['days'].' дн. | до '.$r['expires_at'].' | '.$r['reason']."\n";sendMessage($peer,$s);break;case'getmute':$t=$target??(int)($a[0]??0);$q=$p->prepare('SELECT moderator_id,minutes,reason,created_at,expires_at,active FROM mutes WHERE peer_id=? AND user_id=? ORDER BY id DESC');$q->execute([$peer,$t]);$s='🔇 Муты '.nameOf($t).":\n";foreach($q as $r)$s.='• '.($r['active']?'активен':'снят').' | выдал '.nameOf((int)$r['moderator_id']).' | '.$r['minutes'].' мин. | до '.$r['expires_at'].' | '.$r['reason']."\n";sendMessage($peer,$s);break;
  case 'warnlist':case'преды':$q=$p->prepare('SELECT user_id,COUNT(*) c FROM warnings WHERE peer_id=? AND active=1 GROUP BY user_id ORDER BY c DESC');$q->execute([$peer]);$s="⚠️ Список варнов:\n";foreach($q as $r)$s.='• '.nameOf((int)$r['user_id']).' — '.$r['c']."\n";sendMessage($peer,$s);break;
  case 'мут':$t=$target??(int)($a[0]??0);$idx=$target?0:1;$mins=(int)($a[$idx]??0);if(!$t||$mins<=0){sendMessage($peer,'Использование: !мут [ID] [минуты] [причина]');break;}$bad=punishAllowed($p,$peer,$from,$t,20);if($bad){sendMessage($peer,$bad);break;}$reason=trim(implode(' ',array_slice($a,$idx+1)))?:'Без причины';$exp=date('Y-m-d H:i:s',time()+$mins*60);$p->prepare('INSERT INTO mutes(peer_id,user_id,moderator_id,minutes,reason,expires_at) VALUES(?,?,?,?,?,?)')->execute([$peer,$t,$from,$mins,$reason,$exp]);sendMessage($peer,"🔇 ".nameOf($t)." получил мут на {$mins} мин. Причина: {$reason}");break;case'унмут':$t=$target??(int)($a[0]??0);$p->prepare('UPDATE mutes SET active=0 WHERE peer_id=? AND user_id=? AND active=1')->execute([$peer,$t]);sendMessage($peer,'🔊 Мут снят.');break;
- case 'кик':$t=$target??(int)($a[0]??0);$bad=punishAllowed($p,$peer,$from,$t,20);if($bad){sendMessage($peer,$bad);break;}$r=vk('messages.removeChatUser',['chat_id'=>$peer-2000000000,'member_id'=>$t]);sendMessage($peer,isset($r['response'])?'👢 Пользователь исключён.':'❌ VK: '.($r['error']['error_msg']??'ошибка'));break;
- case 'бан':$t=$target??(int)($a[0]??0);$idx=$target?0:1;$days=(int)($a[$idx]??0);if(!$t||$days<=0){sendMessage($peer,'Использование: !бан [ID] [дни] [причина]');break;}$bad=punishAllowed($p,$peer,$from,$t,40);if($bad){sendMessage($peer,$bad);break;}$reason=trim(implode(' ',array_slice($a,$idx+1)))?:'не указана';$exp=date('Y-m-d H:i:s',time()+$days*86400);$p->prepare('INSERT INTO bans(peer_id,user_id,moderator_id,days,reason,expires_at) VALUES(?,?,?,?,?,?)')->execute([$peer,$t,$from,$days,$reason,$exp]);sendMessage($peer,"🔨 ".nameOf($t)." заблокирован на {$days} дн.\nПричина: {$reason}");break;case'унбан':$t=$target??(int)($a[0]??0);$p->prepare('UPDATE bans SET active=0 WHERE peer_id=? AND user_id=? AND active=1')->execute([$peer,$t]);sendMessage($peer,'✅ Бан снят.');break;
+ case 'кик':case'kick':
+   $t=$target??0;
+   if(!$t){sendMessage($peer,'❌ Не удалось определить пользователя. Укажите ID, @id123, ссылку VK или ответьте на его сообщение.');break;}
+   $bad=punishAllowed($p,$peer,$from,$t,20);if($bad){sendMessage($peer,$bad);break;}
+   $chatId=$peer-2000000000;
+   if($chatId<=0){sendMessage($peer,'❌ Команда доступна только в групповой беседе VK.');break;}
+   $r=vk('messages.removeChatUser',['chat_id'=>$chatId,'member_id'=>$t]);
+   if(isset($r['error'])){
+      loga($p,$peer,$from,$t,'kick_error',json_encode($r['error'],JSON_UNESCAPED_UNICODE));
+      sendMessage($peer,'❌ Не удалось исключить пользователя.\nVK: '.($r['error']['error_msg']??'неизвестная ошибка').'\nКод: '.($r['error']['error_code']??'?').'\nПроверьте, что сообщество имеет права администратора беседы.');
+   }else{
+      loga($p,$peer,$from,$t,'kick','Пользователь исключён');
+      sendMessage($peer,'👢 Пользователь '.nameOf($t).' исключён из беседы.');
+   }
+   break;
+ case 'бан':case'ban':
+   $t=$target??0;$idx=$target?0:1;$days=(int)($a[$idx]??0);
+   if(!$t||$days<=0){sendMessage($peer,'Использование: /бан [ID] [дни] [причина] или ответом на сообщение: /бан [дни] [причина]');break;}
+   $bad=punishAllowed($p,$peer,$from,$t,40);if($bad){sendMessage($peer,$bad);break;}
+   $reason=trim(implode(' ',array_slice($a,$idx+1)))?:'не указана';
+   $exp=date('Y-m-d H:i:s',time()+$days*86400);
+   $p->prepare('INSERT INTO bans(peer_id,user_id,moderator_id,days,reason,expires_at) VALUES(?,?,?,?,?,?)')->execute([$peer,$t,$from,$days,$reason,$exp]);
+   loga($p,$peer,$from,$t,'ban',"{$days} дн.; {$reason}");
+   // В VK нет отдельного бессрочного API-ban для пользователя беседы. Поэтому активный бан
+   // сохраняется в БД и пользователь сразу исключается из беседы.
+   $chatId=$peer-2000000000;
+   $r=$chatId>0?vk('messages.removeChatUser',['chat_id'=>$chatId,'member_id'=>$t]):['error'=>['error_msg'=>'Неверный chat_id']];
+   if(isset($r['error'])){
+      loga($p,$peer,$from,$t,'ban_remove_error',json_encode($r['error'],JSON_UNESCAPED_UNICODE));
+      sendMessage($peer,'🔨 Бан записан на '.$days.' дн., но исключить пользователя из VK не удалось.\nVK: '.($r['error']['error_msg']??'неизвестная ошибка').'\nКод: '.($r['error']['error_code']??'?').'\nПроверьте права сообщества администратора беседы.');
+   }else{
+      sendMessage($peer,"🔨 ".nameOf($t)." заблокирован на {$days} дн. и исключён из беседы.\nПричина: {$reason}");
+   }
+   break;case'унбан':$t=$target??(int)($a[0]??0);$p->prepare('UPDATE bans SET active=0 WHERE peer_id=? AND user_id=? AND active=1')->execute([$peer,$t]);sendMessage($peer,'✅ Бан снят.');break;
  case 'вызов':mentionAll($p,$peer,$argText?:'📢 Вызов участников!');break;case'чатинфо':$m=chatMembers($peer);$q=$p->prepare('SELECT COUNT(*) FROM chat_users WHERE peer_id=?');$q->execute([$peer]);sendMessage($peer,'ℹ️ ID: '.$peer."\nУчастников VK: ".count($m)."\nПользователей в базе: ".$q->fetchColumn());break;case'reg':$t=$target??(int)($a[0]??$from);$q=$p->prepare('SELECT registered_at FROM economy WHERE peer_id=? AND user_id=?');$q->execute([$peer,$t]);sendMessage($peer,'📅 Регистрация: '.($q->fetchColumn()?:'нет данных'));break;
  case 'role':$t=$target??(int)($a[0]??0);$rn=trim(implode(' ',array_slice($a,$target?1:1)));$rid=null;if(is_numeric($rn)){$q=$p->prepare('SELECT id FROM roles WHERE priority=?');$q->execute([(int)$rn]);$rid=$q->fetchColumn();}else{$q=$p->prepare('SELECT id FROM roles WHERE name=?');$q->execute([$rn]);$rid=$q->fetchColumn();}if(!$t||!$rid){sendMessage($peer,'Использование: !role [ID] [роль/приоритет]');break;}$p->prepare('INSERT INTO chat_users(peer_id,user_id,role_id) VALUES(?,?,?) ON CONFLICT(peer_id,user_id) DO UPDATE SET role_id=excluded.role_id')->execute([$peer,$t,$rid]);sendMessage($peer,'👑 Роль выдана.');break;case'removerole':$t=$target??(int)($a[0]??0);$p->prepare('UPDATE chat_users SET role_id=1 WHERE peer_id=? AND user_id=?')->execute([$peer,$t]);sendMessage($peer,'✅ Все роли сняты.');break;case'помощник':case'модер':$t=$target??(int)($a[0]??0);$r=$cmd==='помощник'?2:3;$p->prepare('UPDATE chat_users SET role_id=? WHERE peer_id=? AND user_id=?')->execute([$r,$peer,$t]);sendMessage($peer,'👑 Роль назначена.');break;
  case 'тишина':$mins=(int)($a[0]??0);if(!$mins){$mins=30;}if(str_contains(mb_strtolower($argText),'час'))$mins=(int)preg_replace('/\D/','',$argText)*60;if(str_contains(mb_strtolower($argText),'дн'))$mins=(int)preg_replace('/\D/','',$argText)*1440;$until=date('Y-m-d H:i:s',time()+$mins*60);$p->prepare('INSERT INTO chat_settings(peer_id,silence_until) VALUES(?,?) ON CONFLICT(peer_id) DO UPDATE SET silence_until=excluded.silence_until')->execute([$peer,$until]);sendMessage($peer,"🔇 Режим тишины включён до {$until}.");break;
