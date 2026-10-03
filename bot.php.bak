@@ -11,7 +11,31 @@ date_default_timezone_set(trim((string)getenv('TZ'))?:'Europe/Moscow');
 $logFile='';
 if($token===''||$groupId<=0){fwrite(STDERR,"ERROR: set VK_TOKEN and VK_GROUP_ID\n");exit(1);} 
 
-function vk(string $m,array $p=[]):array{global $token;$p['access_token']=$token;$p['v']='5.199';$u='https://api.vk.com/method/'.$m.'?'.http_build_query($p);$c=stream_context_create(['http'=>['timeout'=>35,'ignore_errors'=>true]]);$r=@file_get_contents($u,false,$c);if($r===false)return['error'=>['error_msg'=>'VK API request failed']];$j=json_decode($r,true);return is_array($j)?$j:['error'=>['error_msg'=>'Invalid VK response']];}
+function vk(string $m,array $p=[]):array{
+    global $token;
+    $p['access_token']=$token; $p['v']='5.199';
+    $url='https://api.vk.com/method/'.$m;
+    $body=http_build_query($p);
+    $last=['error'=>['error_msg'=>'VK API request failed']];
+    for($attempt=1;$attempt<=2;$attempt++){
+        if(function_exists('curl_init')){
+            $ch=curl_init($url);
+            curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>$body,CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>8,CURLOPT_TIMEOUT=>25,CURLOPT_HTTPHEADER=>['Content-Type: application/x-www-form-urlencoded']]);
+            $raw=curl_exec($ch); $errno=curl_errno($ch); $err=curl_error($ch); curl_close($ch);
+            if($raw!==false && $errno===0){$j=json_decode((string)$raw,true); if(is_array($j))return $j; $last=['error'=>['error_msg'=>'Invalid VK JSON response']];}
+            else $last=['error'=>['error_msg'=>'VK HTTP transport error: '.($err?:('errno '.$errno))]];
+        }else{
+            $ctx=stream_context_create(['http'=>['method'=>'POST','header'=>'Content-Type: application/x-www-form-urlencoded\r\n','content'=>$body,'timeout'=>25,'ignore_errors'=>true]]);
+            $raw=@file_get_contents($url,false,$ctx);
+            if($raw!==false){$j=json_decode((string)$raw,true);if(is_array($j))return $j;$last=['error'=>['error_msg'=>'Invalid VK JSON response']];}
+            else $last=['error'=>['error_msg'=>'VK HTTP transport failed']];
+        }
+        if($attempt<2)usleep(250000);
+    }
+    botLog('VK ERROR method='.$m.' '.json_encode($last['error']??$last,JSON_UNESCAPED_UNICODE));
+    return $last;
+}
+
 function botLog(string $line):void{global $logFile;$line='['.date('Y-m-d H:i:s').'] '.$line.PHP_EOL;fwrite(STDOUT,$line);if($logFile!=='')@file_put_contents($logFile,$line,FILE_APPEND|LOCK_EX);}
 function prettyBotText(string $text):string{ $t=trim($text); if($t===''||str_starts_with($t,'🟣 RAZE RUSSIA')) return $text; return "┏━━━━━━━━━━━━━━━━━━┓\n🟣 RAZE RUSSIA\n┗━━━━━━━━━━━━━━━━━━┛\n\n".$t; }
 function sendMessage(int $peer,string $text):bool{$text=prettyBotText($text);$r=vk('messages.send',['peer_id'=>$peer,'random_id'=>random_int(-2147483648,2147483647),'message'=>$text]);if(isset($r['error'])){botLog('SEND ERROR peer='.$peer.' '.json_encode($r['error'],JSON_UNESCAPED_UNICODE));return false;}botLog("SENT to {$peer}");return true;}
@@ -53,19 +77,22 @@ if(!extension_loaded('pdo_mysql')){
     fwrite(STDERR,"ERROR: pdo_mysql extension is not loaded\n");
     exit(1);
 }
-try{
-    $dsn="mysql:host={$dbHost};port={$dbPort};dbname={$dbName};charset=utf8mb4";
-    $pdo=new PDO($dsn,$dbUser,$dbPass,[
-        PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES=>false,
-    ]);
-    $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
-    $pdo->exec("SET time_zone = '+03:00'");
-    botLog("MYSQL CONNECTED host={$dbHost}:{$dbPort} db={$dbName}");
-}catch(Throwable $e){
-    fwrite(STDERR,"MYSQL CONNECTION ERROR: ".$e->getMessage()."\n");
-    exit(1);
+$pdo=null;
+$dsn="mysql:host={$dbHost};port={$dbPort};dbname={$dbName};charset=utf8mb4";
+while($pdo===null){
+    try{
+        $pdo=new PDO($dsn,$dbUser,$dbPass,[
+            PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES=>false,
+        ]);
+        $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+        $pdo->exec("SET time_zone = '+03:00'");
+        botLog("MYSQL CONNECTED host={$dbHost}:{$dbPort} db={$dbName}");
+    }catch(Throwable $e){
+        fwrite(STDERR,"MYSQL CONNECTION ERROR: ".$e->getMessage()." — retrying in 10s\n");
+        sleep(10);
+    }
 }
 $logFile=__DIR__.'/data/bot.log';
 @mkdir(__DIR__.'/data',0775,true);
@@ -117,7 +144,7 @@ ensureColumn($pdo,'report_messages','direction',"VARCHAR(16) NOT NULL DEFAULT 'u
 function chatTitleAndLink(int $peer):array{
     if($peer<2000000001) return ['title'=>'Личные сообщения','link'=>''];
     $title='';
-    $r=vk('messages.getConversationsById',['peer_ids'=>(string)$peer]);
+    $r=vk('messages.getConversationsById',['peer_ids'=>(string)$peer,'extended'=>1]);
     if(!isset($r['error'])){
         $item=$r['response']['items'][0]??[];
         $title=trim((string)($item['conversation']['chat_settings']['title']??''));
@@ -185,7 +212,7 @@ function isSuper(int $uid):bool{global $pdo,$ownerIds;if(in_array($uid,$ownerIds
 function level(PDO $p,int $peer,int $uid):int{return isSuper($uid)?100:priority($p,$peer,$uid);}
 function loga(PDO $p,int $peer,int $actor,?int $target,string $action,string $details=''):void{$s=$p->prepare('INSERT INTO logs(peer_id,actor_id,target_id,action,details) VALUES(?,?,?,?,?)');$s->execute([$peer,$actor,$target,$action,$details]);}
 function expire(PDO $p):void{$p->exec("UPDATE bans SET active=0 WHERE active=1 AND expires_at IS NOT NULL AND expires_at<=NOW()");$p->exec("UPDATE mutes SET active=0 WHERE active=1 AND expires_at IS NOT NULL AND expires_at<=NOW()");}
-function parseCommand(string $t):array{$t=trim($t);if($t==='')return['',[]];$t=preg_replace('/^[!\/\.,#?]+/u','',$t);$a=preg_split('/\s+/u',$t);$cmd=mb_strtolower((string)array_shift($a));$aliases=['commands'=>'команды','cmd'=>'команды','rules'=>'правила','roles'=>'роли','admins'=>'админы','online'=>'онлайн','profile'=>'профиль','bonus'=>'бонус','casino'=>'казино','transfer'=>'перевод','top'=>'топ','citizenship'=>'гражданство','country'=>'страна','countries'=>'страны','marriage'=>'брак','divorce'=>'развод','hug'=>'обнять','try'=>'попытка','beer'=>'пиво','mute'=>'мут','unmute'=>'унмут','kick'=>'кик','warn'=>'пред','unwarn'=>'унварн','warnings'=>'предупреждения','warns'=>'предупреждения','ban'=>'бан','unban'=>'унбан','nickname'=>'ник','nick'=>'ник','setnick'=>'сник','removenick'=>'рник','nicklist'=>'нлист','nonicks'=>'безников','call'=>'вызов','chatinfo'=>'чатинфо','register'=>'reg','mention'=>'упоминать','nomention'=>'неупоминать','helper'=>'помощник','moder'=>'модер','silence'=>'тишина','findnick'=>'понику','globalcall'=>'gzov','globalkick'=>'gkick','globalnick'=>'gsnick','giveadmin'=>'admin','givehelper'=>'гпомощник','givemoder'=>'гмодер','globalban'=>'gban','globalunban'=>'gunban','globalrole'=>'grole','delete'=>'удалить','immunity'=>'gm','removeimmunity'=>'removegm','immunities'=>'gms','newrole'=>'newrole','delrole'=>'delrole','welcome'=>'welcome','setrules'=>'setrules','deleterules'=>'delrules','inactive'=>'неактив','givemoney'=>'givemoney','money'=>'givemoney','timeannounce'=>'timeuved','settings'=>'settings','setup'=>'setup','unity'=>'unity','addunity'=>'addunity','createunity'=>'createunity','editunity'=>'editunity','removeunity'=>'removeunity','sync'=>'sync','owner'=>'owner','automod'=>'automod','addsuper'=>'addws','super'=>'addws','setlog'=>'setlog','globalcallall'=>'zovvv','globalannounce'=>'gtimeuvedg','globalcallg'=>'gzovg','reportedit'=>'reportedit','getdialog'=>'getdialog','getreport'=>'getreport','reports'=>'reports','listunities'=>'listunities','unityinfo'=>'unityinfo','uninfo'=>'unityinfo','leaveunity'=>'leaveunity','deleteunity'=>'deleteunity','delunity'=>'deleteunity','объединение'=>'unity','создатьобъединение'=>'createunity','добавитьвобъединение'=>'addunity','удалитьизобъединения'=>'removeunity','объединения'=>'listunities','объединениеинфо'=>'unityinfo','выйтиобъединения'=>'leaveunity','удалитьобъединение'=>'deleteunity','гкик'=>'gkick','гсник'=>'gsnick','гбан'=>'gban','гунбан'=>'gunban','гроль'=>'grole','гзов'=>'gzov','гглава'=>'gspec','listen'=>'listen','chatlist'=>'chatlist','userchats'=>'userchats','ahistory'=>'ahistory','checkban'=>'checkban','rep'=>'report','репорты'=>'reports','ticket'=>'getreport','reply'=>'ответ','ответить'=>'ответ','take'=>'взять','claim'=>'взять','close'=>'закрыть','reopen'=>'открытьрепорт','reportdialog'=>'getdialog','repdialog'=>'getdialog','myreports'=>'мои','superlist'=>'суперы','addsuper'=>'добавитьсупер','delsuper'=>'удалитьсупер','checksuper'=>'проверкасуперов','checksupers'=>'проверкасуперов','тестсуперов'=>'проверкасуперов','testreport'=>'тестрепорт','sysrole'=>'sysrole','sysban'=>'sysban','sysunban'=>'sysunban','staff'=>'staff','сотрудники'=>'staff','version'=>'версия'];if(isset($aliases[$cmd]))$cmd=$aliases[$cmd];return[$cmd,$a];}
+function parseCommand(string $t):array{$t=trim($t);if($t==='')return['',[]];$t=preg_replace('/^[!\/\.,#?]+/u','',$t);$a=preg_split('/\s+/u',$t);$cmd=mb_strtolower((string)array_shift($a));$aliases=['commands'=>'команды','cmd'=>'команды','rules'=>'правила','roles'=>'роли','admins'=>'админы','online'=>'онлайн','profile'=>'профиль','bonus'=>'бонус','casino'=>'казино','transfer'=>'перевод','top'=>'топ','citizenship'=>'гражданство','country'=>'страна','countries'=>'страны','marriage'=>'брак','divorce'=>'развод','hug'=>'обнять','try'=>'попытка','beer'=>'пиво','mute'=>'мут','unmute'=>'унмут','kick'=>'кик','warn'=>'пред','unwarn'=>'унварн','warnings'=>'предупреждения','warns'=>'предупреждения','ban'=>'бан','unban'=>'унбан','nickname'=>'ник','nick'=>'ник','setnick'=>'сник','removenick'=>'рник','nicklist'=>'нлист','nonicks'=>'безников','call'=>'вызов','chatinfo'=>'чатинфо','register'=>'reg','mention'=>'упоминать','nomention'=>'неупоминать','helper'=>'помощник','moder'=>'модер','silence'=>'тишина','findnick'=>'понику','globalcall'=>'gzov','globalkick'=>'gkick','globalnick'=>'gsnick','giveadmin'=>'admin','givehelper'=>'гпомощник','givemoder'=>'гмодер','globalban'=>'gban','globalunban'=>'gunban','globalrole'=>'grole','delete'=>'удалить','immunity'=>'gm','removeimmunity'=>'removegm','immunities'=>'gms','newrole'=>'newrole','delrole'=>'delrole','welcome'=>'welcome','setrules'=>'setrules','deleterules'=>'delrules','inactive'=>'неактив','givemoney'=>'givemoney','money'=>'givemoney','timeannounce'=>'timeuved','settings'=>'settings','setup'=>'setup','unity'=>'unity','addunity'=>'addunity','createunity'=>'createunity','editunity'=>'editunity','removeunity'=>'removeunity','sync'=>'sync','owner'=>'owner','automod'=>'automod','addsuper'=>'addws','super'=>'addws','setlog'=>'setlog','globalcallall'=>'zovvv','globalannounce'=>'gtimeuvedg','globalcallg'=>'gzovg','reportedit'=>'reportedit','getdialog'=>'getdialog','getreport'=>'getreport','reports'=>'reports','listunities'=>'listunities','unityinfo'=>'unityinfo','uninfo'=>'unityinfo','leaveunity'=>'leaveunity','deleteunity'=>'deleteunity','delunity'=>'deleteunity','объединение'=>'unity','создатьобъединение'=>'createunity','добавитьвобъединение'=>'addunity','удалитьизобъединения'=>'removeunity','объединения'=>'listunities','объединениеинфо'=>'unityinfo','выйтиобъединения'=>'leaveunity','удалитьобъединение'=>'deleteunity','гкик'=>'gkick','гсник'=>'gsnick','гбан'=>'gban','гунбан'=>'gunban','гроль'=>'grole','гзов'=>'gzov','гглава'=>'gspec','listen'=>'listen','chatlist'=>'chatlist','userchats'=>'userchats','ahistory'=>'ahistory','checkban'=>'checkban','rep'=>'report','репорты'=>'reports','ticket'=>'getreport','reply'=>'ответ','ответить'=>'ответ','take'=>'взять','claim'=>'взять','close'=>'закрыть','reopen'=>'открытьрепорт','reportdialog'=>'getdialog','repdialog'=>'getdialog','myreports'=>'мои','superlist'=>'суперы','addsuper'=>'добавитьсупер','delsuper'=>'удалитьсупер','checksuper'=>'проверкасуперов','checksupers'=>'проверкасуперов','тестсуперов'=>'проверкасуперов','testreport'=>'тестрепорт','sysrole'=>'sysrole','sysban'=>'sysban','sysunban'=>'sysunban','staff'=>'staff','сотрудники'=>'staff','version'=>'версия','health'=>'диагностика','diag'=>'диагностика','diagnostics'=>'диагностика','диагностика'=>'диагностика'];if(isset($aliases[$cmd]))$cmd=$aliases[$cmd];return[$cmd,$a];}
 function resolveUserToken(string $v):?int{
     $v=trim($v);
     if(preg_match('/^\[id(\d+)\|/i',$v,$m))return(int)$m[1];
@@ -269,7 +296,7 @@ function helpText():string{return <<<TXT
 
 **Общие:**
 !помощь / !команды / !help — помощь
-!пинг / !статус / !версия — состояние и версия
+!пинг / !статус / !версия / !диагностика — состояние и диагностика
 !правила / !роли / !админы / !staff / !онлайн
 !myid / !thereid / !id — ID пользователя/беседы
 !профиль / !проф — профиль и баланс
@@ -411,7 +438,7 @@ function handle(PDO $p,array $o):void{
  $peer=(int)($o['peer_id']??0);$from=(int)($o['from_id']??0);$text=trim((string)($o['text']??''));
  if(!$peer)return; if($peer>=2000000001) ensureBotChat($p,$peer,false); if($peer>=2000000001&&$from>0){$sq=$p->prepare('SELECT silence_until FROM chat_settings WHERE peer_id=?');$sq->execute([$peer]);$silence=$sq->fetchColumn();if($silence&&strtotime((string)$silence)>time()&&level($p,$peer,$from)<40){$cmid=(int)($o['conversation_message_id']??0);if($cmid)vk('messages.delete',['peer_id'=>$peer,'cmids'=>$cmid,'delete_for_all'=>1]);return;}} botLog("EVENT message_new peer={$peer} from={$from} text=".json_encode($text,JSON_UNESCAPED_UNICODE));if($from>0)ensureUser($p,$peer,$from);expire($p);$actions=[];if(isset($o['action'])&&is_array($o['action']))$actions[]=$o['action'];if(isset($o['object']['action'])&&is_array($o['object']['action']))$actions[]=$o['object']['action'];foreach($actions as $action){botLog('ACTION '.json_encode($action,JSON_UNESCAPED_UNICODE)); $atype=(string)($action['type']??''); $member=abs((int)($action['member_id']??0)); if($atype==='chat_kick_user' && $member>0 && $member!==$groupId){ $p->prepare('UPDATE chat_users SET role_id=1,immunity=0,mention_optout=0 WHERE peer_id=? AND user_id=?')->execute([$peer,$member]); $p->prepare('DELETE FROM nicknames WHERE peer_id=? AND user_id=?')->execute([$peer,$member]); botLog("RESET MEMBER peer={$peer} user={$member}: role/nickname/immunity/mention settings cleared"); } if($atype==='chat_kick_user' && $member===$groupId){ $p->prepare('UPDATE bot_chats SET is_active=0,last_seen=NOW() WHERE peer_id=?')->execute([$peer]); } elseif($atype==='chat_invite_user' && $member===$groupId){ ensureBotChat($p,$peer,true); } if(checkSysBanAction($p,$peer,$action))return;if(($action['type']??'')==='chat_invite_user'&&abs((int)($action['member_id']??0))!==$groupId){$joined=abs((int)($action['member_id']??0));if($joined>0){$wq=$p->prepare('SELECT welcome FROM chat_settings WHERE peer_id=?');$wq->execute([$peer]);$welcome=trim((string)($wq->fetchColumn()?:''));if($welcome!=='')sendMessage($peer,$welcome);}} if(($action['type']??'')==='chat_invite_user'&&abs((int)($action['member_id']??0))===$groupId){$p->prepare("INSERT IGNORE INTO chat_settings(peer_id,rules,welcome,mentions_enabled) VALUES(?,?,?,1)")->execute([$peer,'Правила беседы ещё не настроены.','Добро пожаловать в RAZE RUSSIA!']); ensureBotChat($p,$peer,true);botLog("BOT INVITED peer={$peer} member_id=".(int)($action['member_id']??0));ensureChatLeadership($p,$peer);sendMessage($peer,"🤖 RAZE RUSSIA подключён!\n\n⚙️ Настройка:\n1) Выдайте сообществу права администратора беседы.\n2) Разрешите управление сообщениями и участниками.\n3) Напишите !помощь — список команд.\n\n🔹 Префиксы: ! / . , # ?\n🔹 Примеры: !пинг, /пинг, .пинг, ,пинг, #пинг, ?пинг\n🔹 Звезда: !звезда [ID]\n🔹 Деньги супер-доступом: !выдатьденьги [ID] [сумма]\n🔹 Репорт: /report текст");return;}}if(!$from)return;
  // Guaranteed help path: supports ! / . , # ? prefixes and English/Russian aliases.
- if(preg_match('/^(?:[!\/\.,#?]\s*)?(?:help|commands|cmd|помощь|команды)\b/iu',$text)){sendMessage($peer,helpText());return;}
+ if(preg_match('/^(?:[!\/\.,#?]\s*)?(?:help|commands|cmd|помощь|команды)(?:\s|$)/iu',$text)){sendMessage($peer,helpText());return;}
  // Direct diagnostics: these commands bypass alias/priority parsing so they always work for the owner.
  $direct=mb_strtolower(trim($text));
  if(in_array($direct,['!проверкасуперов','/проверкасуперов','.проверкасуперов',',проверкасуперов','#проверкасуперов','?проверкасуперов','!тестрепорт','/тестрепорт','.тестрепорт',',тестрепорт','#тестрепорт','?тестрепорт'],true) && isSuper($from)){
@@ -426,7 +453,7 @@ function handle(PDO $p,array $o):void{
  }
  [$cmd,$a]=parseCommand($text);if($cmd==='')return;
  $L=level($p,$peer,$from);$target=target($o,$a);$req=[
- 'пинг'=>[0,'Участник'],'ping'=>[0,'Участник'],'статус'=>[0,'Участник'],'help'=>[0,'Участник'],'помощь'=>[0,'Участник'],'команды'=>[0,'Участник'],'start'=>[0,'Участник'],'правила'=>[0,'Участник'],'роли'=>[0,'Участник'],'версия'=>[0,'Участник'],'админы'=>[0,'Участник'],'staff'=>[0,'Участник'],'онлайн'=>[0,'Участник'],'history'=>[0,'Участник'],'myid'=>[0,'Участник'],'thereid'=>[0,'Участник'],'id'=>[0,'Участник'],'report'=>[0,'Участник'],'rep'=>[0,'Участник'],'репорты'=>[100,'Владелец'],'репорт'=>[100,'Владелец'],'взять'=>[100,'Владелец'],'ответ'=>[100,'Владелец'],'закрыть'=>[100,'Владелец'],'открытьрепорт'=>[100,'Владелец'],'диалогрепорта'=>[100,'Владелец'],'мои'=>[100,'Владелец'],'суперы'=>[100,'Владелец'],'добавитьсупер'=>[100,'Владелец'],'удалитьсупер'=>[100,'Владелец'],'проверкасуперов'=>[100,'Владелец'],'тестрепорт'=>[100,'Владелец'],'профиль'=>[0,'Участник'],'проф'=>[0,'Участник'],'бонус'=>[0,'Участник'],'bonus'=>[0,'Участник'],'казино'=>[0,'Участник'],'перевод'=>[0,'Участник'],'топ'=>[0,'Участник'],'top'=>[0,'Участник'],'atop'=>[0,'Участник'],'гражданство'=>[0,'Участник'],'страна'=>[0,'Участник'],'страны'=>[0,'Участник'],'брак'=>[0,'Участник'],'развод'=>[0,'Участник'],'браки'=>[0,'Участник'],'поцелуй'=>[0,'Участник'],'kiss'=>[0,'Участник'],'обнять'=>[0,'Участник'],'попытка'=>[0,'Участник'],'пиво'=>[0,'Участник'],
+ 'пинг'=>[0,'Участник'],'ping'=>[0,'Участник'],'статус'=>[0,'Участник'],'help'=>[0,'Участник'],'помощь'=>[0,'Участник'],'команды'=>[0,'Участник'],'start'=>[0,'Участник'],'правила'=>[0,'Участник'],'роли'=>[0,'Участник'],'версия'=>[0,'Участник'],'диагностика'=>[0,'Участник'],'админы'=>[0,'Участник'],'staff'=>[0,'Участник'],'онлайн'=>[0,'Участник'],'history'=>[0,'Участник'],'myid'=>[0,'Участник'],'thereid'=>[0,'Участник'],'id'=>[0,'Участник'],'report'=>[0,'Участник'],'rep'=>[0,'Участник'],'репорты'=>[100,'Владелец'],'репорт'=>[100,'Владелец'],'взять'=>[100,'Владелец'],'ответ'=>[100,'Владелец'],'закрыть'=>[100,'Владелец'],'открытьрепорт'=>[100,'Владелец'],'диалогрепорта'=>[100,'Владелец'],'мои'=>[100,'Владелец'],'суперы'=>[100,'Владелец'],'добавитьсупер'=>[100,'Владелец'],'удалитьсупер'=>[100,'Владелец'],'проверкасуперов'=>[100,'Владелец'],'тестрепорт'=>[100,'Владелец'],'профиль'=>[0,'Участник'],'проф'=>[0,'Участник'],'бонус'=>[0,'Участник'],'bonus'=>[0,'Участник'],'казино'=>[0,'Участник'],'перевод'=>[0,'Участник'],'топ'=>[0,'Участник'],'top'=>[0,'Участник'],'atop'=>[0,'Участник'],'гражданство'=>[0,'Участник'],'страна'=>[0,'Участник'],'страны'=>[0,'Участник'],'брак'=>[0,'Участник'],'развод'=>[0,'Участник'],'браки'=>[0,'Участник'],'поцелуй'=>[0,'Участник'],'kiss'=>[0,'Участник'],'обнять'=>[0,'Участник'],'попытка'=>[0,'Участник'],'пиво'=>[0,'Участник'],
  'сник'=>[20,'Помощник'],'ник'=>[20,'Помощник'],'рник'=>[20,'Помощник'],'нлист'=>[20,'Помощник'],'безников'=>[20,'Помощник'],'мут'=>[20,'Помощник'],'унмут'=>[20,'Помощник'],'кик'=>[20,'Помощник'],'пред'=>[20,'Помощник'],'варн'=>[20,'Помощник'],'унварн'=>[20,'Помощник'],'снятьпред'=>[20,'Помощник'],'предупреждения'=>[20,'Помощник'],'getwarns'=>[20,'Помощник'],'getwarn'=>[20,'Помощник'],'getban'=>[20,'Помощник'],'getmute'=>[20,'Помощник'],'warnlist'=>[20,'Помощник'],'преды'=>[20,'Помощник'],'бан'=>[20,'Помощник'],'унбан'=>[20,'Помощник'],'вызов'=>[20,'Помощник'],'чатинфо'=>[20,'Помощник'],'reg'=>[20,'Помощник'],'упоминать'=>[20,'Помощник'],'неупоминать'=>[20,'Помощник'],
  'звезда'=>[40,'Модератор'],'снятьзвезду'=>[40,'Модератор'],'звезды'=>[0,'Участник'],'star'=>[40,'Модератор'],'unstar'=>[40,'Модератор'],'stars'=>[0,'Участник'],
  'sysrole'=>[100,'Супер-доступ'],'sysban'=>[100,'Супер-доступ'],'sysunban'=>[100,'Супер-доступ'],'role'=>[40,'Модератор'],'removerole'=>[40,'Модератор'],'помощник'=>[40,'Модератор'],'модер'=>[40,'Модератор'],'тишина'=>[40,'Модератор'],'понику'=>[40,'Модератор'],'gzov'=>[40,'Модератор'],'gkick'=>[40,'Модератор'],'gsnick'=>[40,'Модератор'],
@@ -441,7 +468,8 @@ function handle(PDO $p,array $o):void{
  case 'help':case'помощь':case'команды':case'start':sendMessage($peer,helpText());break;
  case 'правила':sendMessage($peer,rulesText($p,$peer));break;
  case 'роли':$rows=$p->query('SELECT name,priority FROM roles ORDER BY priority DESC')->fetchAll();$s="👑 Роли:\n";foreach($rows as $r)$s.="• {$r['name']} ({$r['priority']})\n";sendMessage($peer,$s);break;
- case 'версия':sendMessage($peer,'🤖 RAZE RUSSIA BOT\n📦 Build: FINAL-2026-10-03\n🛠 chatMembers + !staff + !онлайн FIX');break;
+ case 'версия':sendMessage($peer,'🤖 RAZE RUSSIA BOT\n📦 Build: AUDITED-2026-10-03');break;
+ case 'диагностика':$mysql='✅';try{$p->query('SELECT 1');}catch(Throwable $e){$mysql='❌';} $vkcheck=vk('groups.getById',['group_id'=>$groupId]);$vkstate=isset($vkcheck['response'])?'✅':'❌';sendMessage($peer,"🩺 Диагностика RAZE RUSSIA\n\nMySQL: {$mysql}\nVK API: {$vkstate}\nLong Poll: активен (команда получена)\nPeer: {$peer}\nUser: {$from}");break;
  case 'админы':case 'staff':$q=$p->prepare('SELECT u.user_id,r.name,r.priority FROM chat_users u JOIN roles r ON r.id=u.role_id WHERE u.peer_id=? AND r.priority>0 ORDER BY r.priority DESC,u.user_id');$q->execute([$peer]);$rows=$q->fetchAll();$s="👮 STAFF / Администрация:
 
 ";foreach($rows as $r)$s.="• ".nameOf((int)$r['user_id'])." — {$r['name']} ({$r['priority']})
@@ -631,7 +659,10 @@ event_answer:
     if($eventId)vk('messages.sendMessageEventAnswer',['event_id'=>$eventId,'user_id'=>$uid,'peer_id'=>$peer,'event_data'=>json_encode($answer,JSON_UNESCAPED_UNICODE)]);
 }
 
-function lp():array{global $groupId;for($i=0;$i<5;$i++){$r=vk('groups.getLongPollServer',['group_id'=>$groupId]);if(isset($r['response']))return$r['response'];sleep(2);}throw new RuntimeException('Cannot get VK Long Poll server');}
+function lp():array{global $groupId;for($i=0;$i<8;$i++){ $r=vk('groups.getLongPollServer',['group_id'=>$groupId]); if(isset($r['response']['key'],$r['response']['server'],$r['response']['ts']))return $r['response']; botLog('LONGPOLL SERVER RETRY '.($i+1).'/8'); sleep(min(5,$i+1)); } throw new RuntimeException('Cannot get VK Long Poll server after retries');}
 
 botLog("MYSQL SCHEMA READY");botLog("RAZE RUSSIA VK BOT MYSQL started.");startupCheck();
-while(true){try{$s=lp();$key=$s['key'];$server=$s['server'];$ts=$s['ts'];while(true){sendScheduled($pdo);$u=$server.'?act=a_check&key='.rawurlencode($key).'&wait=25&ts='.rawurlencode($ts);$c=stream_context_create(['http'=>['timeout'=>35,'ignore_errors'=>true]]);$r=@file_get_contents($u,false,$c);if($r===false)throw new RuntimeException('Long Poll connection failed');$d=json_decode($r,true);if(!is_array($d))throw new RuntimeException('Invalid Long Poll response');if(isset($d['ts']))$ts=$d['ts'];if(isset($d['failed']))break;foreach(($d['updates']??[])as$x){if(($x['type']??'')==='message_event'){handleMessageEvent($x);continue;}if(($x['type']??'')!=='message_new')continue;$o=$x['object']??[];if(isset($o['message'])&&is_array($o['message']))$o=$o['message'];handle($pdo,$o);}}}catch(Throwable$e){botLog('WARN: '.$e->getMessage());sleep(3);}}
+while(true){try{$s=lp();$key=$s['key'];$server=$s['server'];$ts=$s['ts'];while(true){sendScheduled($pdo);$u=$server.'?act=a_check&key='.rawurlencode($key).'&wait=25&ts='.rawurlencode($ts);
+            if(function_exists('curl_init')){ $ch=curl_init($u); curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>8,CURLOPT_TIMEOUT=>35]); $r=curl_exec($ch); $ce=curl_error($ch); curl_close($ch); if($r===false)throw new RuntimeException('Long Poll connection failed: '.($ce?:'curl error')); }
+            else { $c=stream_context_create(['http'=>['timeout'=>35,'ignore_errors'=>true]]);$r=@file_get_contents($u,false,$c);if($r===false)throw new RuntimeException('Long Poll connection failed'); }
+            $d=json_decode((string)$r,true);if(!is_array($d))throw new RuntimeException('Invalid Long Poll response');if(isset($d['ts']))$ts=$d['ts'];if(isset($d['failed'])){botLog('LONGPOLL FAILED code='.json_encode($d['failed']).' restarting');break;}foreach(($d['updates']??[])as$x){try{if(($x['type']??'')==='message_event'){handleMessageEvent($x);continue;}if(($x['type']??'')!=='message_new')continue;$o=$x['object']??[];if(isset($o['message'])&&is_array($o['message']))$o=$o['message'];handle($pdo,$o);}catch(Throwable $e){botLog('UPDATE ERROR type='.($x['type']??'unknown').' '.$e->getMessage());$oo=$x['object']??[];if(isset($oo['message'])&&is_array($oo['message']))$oo=$oo['message'];$ep=(int)($oo['peer_id']??0);if($ep>0){sendMessage($ep,'⚠️ Команда не выполнена из-за внутренней ошибки. Бот продолжил работу. Администратор может проверить !диагностика.');}}}}}catch(Throwable$e){botLog('WARN: '.$e->getMessage());sleep(3);}}
