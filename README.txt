@@ -95,3 +95,14 @@ MYSQL_PASSWORD=ваш существующий пароль
 - !удалить работает только ответом на сообщение и удаляет именно сообщение, на которое был дан ответ.
 - Ответы бота приведены к единому компактному оформлению RAZE RUSSIA.
 - При удалении бота из беседы запись bot_chats помечается неактивной.
+
+AUDIT BUILD 2026-10-03
+- Unity info shows chat names only; chat links remain stored in bot_chats.chat_link.
+- Added per-user mention_optout.
+- Givemoney supports reply/@tag/VK ID and signed amounts; negative amount withdraws money.
+- Added real VK messages.pin/messages.unpin calls.
+- Added silence enforcement for non-moderators and !тишина 0/off to disable.
+- Added moderation history logging for warn/ban/mute and their removal.
+- Added hierarchy checks to role/immunity management and role buttons.
+- Global ban now records the ban and attempts to remove the user from every chat in the unity.
+- MySQL session timezone is +03:00 to match Europe/Moscow.
