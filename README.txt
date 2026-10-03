@@ -1,19 +1,34 @@
-RAZE RUSSIA VK BOT — CLEAN MYSQL BUILD
+RAZE RUSSIA VK BOT — IDEAL / MySQL
 
-1. Import database.sql into your existing MySQL/MariaDB database. Do NOT add CREATE DATABASE.
-2. Upload the project to GitHub/Bothost.
-3. Set environment variables:
-   VK_TOKEN=your VK community token
-   VK_GROUP_ID=241953865
-   OWNER_IDS=831772755
-   TZ=Europe/Moscow
-   MYSQL_HOST=your remote MySQL host
-   MYSQL_PORT=3306
-   MYSQL_DATABASE=your database name
-   MYSQL_USER=your database user
-   MYSQL_PASSWORD=your database password
-4. Start the container.
+1. Импортируйте database.sql в уже созданную MySQL/MariaDB БД.
+2. Загрузите этот проект в GitHub/Bothost.
+3. В Bothost задайте:
+VK_TOKEN=токен сообщества
+VK_GROUP_ID=241953865
+OWNER_IDS=831772755
+TZ=Europe/Moscow
+MYSQL_HOST=удалённый хост MySQL
+MYSQL_PORT=3306
+MYSQL_DATABASE=имя БД
+MYSQL_USER=логин БД
+MYSQL_PASSWORD=пароль БД
+4. Перезапустите контейнер.
 
-The bot requires PHP 8.2+ with pdo_mysql.
-The bot creates/updates its tables automatically and writes runtime diagnostics to data/bot.log.
-Never put the VK token or database password into GitHub files.
+РЕПОРТЫ
+/report текст — создать репорт из беседы.
+Все OWNER_IDS и пользователи таблицы superusers получают уведомление в ЛС.
+!репорты — открытые/взятые репорты.
+!репорт ID — карточка.
+!диалогрепорта ID — вся история.
+!взять ID — назначить себя.
+!ответ ID текст — ответить автору в ЛС.
+!закрыть ID причина — закрыть и уведомить автора.
+!открытьрепорт ID — переоткрыть.
+!мои — ваши активные назначенные репорты.
+!суперы — супер-доступы.
+!добавитьсупер ID / !удалитьсупер ID — управление супер-доступами.
+
+Для уведомлений репортов используются inline-кнопки. Для них включён VK message_event.
+Если VK не разрешает сообществу писать конкретному пользователю, это будет записано в data/bot.log.
+
+ВАЖНО: пароль БД хранится только в переменной окружения Bothost, не в bot.php и не в GitHub.
