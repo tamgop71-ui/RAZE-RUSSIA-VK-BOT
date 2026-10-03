@@ -1,0 +1,10 @@
+{
+  "require": {
+    "php": ">=8.2",
+    "digitalstars/simplevk": "^3.9.8"
+  },
+  "config": {
+    "sort-packages": true,
+    "optimize-autoloader": true
+  }
+}

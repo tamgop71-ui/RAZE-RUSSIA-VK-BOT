@@ -1,21 +1,40 @@
-RAZE RUSSIA VK BOT — KICK/BAN FIX
+RAZE RUSSIA BOT — SimpleVK 3 / Bothost
 
-Replace bot.php in GitHub with the new bot.php.
-Do not replace data/raze.sqlite.
-Then Bothost: Update from Git -> rebuild -> restart.
+Что изменено:
+- Транспорт VK Groups Long Poll переведён на SimpleVK 3.
+- SimpleVK устанавливается Composer автоматически при Docker-сборке.
+- PHP 8.2 + SQLite.
+- Сохранена существующая БД data/raze.sqlite.
+- messages.send НЕ использует reply_to.
+- /kick, /ban, /mute, /warn и английские алиасы поддерживаются.
+- /sysrole доступна только OWNER_IDS и выдаёт superuser-доступ.
+- Старые команды и структура БД перенесены из предыдущей версии.
 
-Important VK permission:
-The community must be an administrator of the VK conversation and have permission to manage the conversation/members. Without that VK will return an API error.
+ENV в Bothost:
+VK_TOKEN=новый токен сообщества
+VK_GROUP_ID=241953865
+OWNER_IDS=831772755
+TZ=Europe/Moscow
 
-Supported target formats:
-/кик 123
-!kick 123
-.kick @id123
-,kick vk.com/id123
-Reply to a user's message and send: /kick
+ВАЖНО:
+Не загружайте data/raze.sqlite в GitHub. Если база уже есть в контейнере Bothost — не удаляйте /app/data.
 
-Ban:
-/бан 123 7 причина
-!ban 123 7 причина
-Reply to a user's message: /ban 7 причина
-Ban is stored in SQLite and the user is immediately removed from the VK conversation. VK does not provide a generic permanent chat-ban method through this API; the bot therefore enforces the ban in its own database.
+Запуск:
+1. Commit всех файлов в GitHub.
+2. Bothost -> Update from Git.
+3. Rebuild/пересборка контейнера.
+4. Restart/запуск.
+5. В логах должно быть:
+   === RAZE RUSSIA BOT / SimpleVK 3 ===
+   SimpleVK Long Poll transport enabled.
+
+Команды проверки:
+!пинг
+!myid
+/sysrole
+/kick ID
+/ban ID 7 причина
+/mute ID 10 причина
+/warn ID причина
+
+Для kick/ban сообщество должно иметь права управления участниками беседы.
