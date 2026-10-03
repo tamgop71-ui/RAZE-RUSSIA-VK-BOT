@@ -82,3 +82,11 @@ REPORT #N: DM NOT ALLOWED uid=...
 
 УПОМЯНАНИЯ
 В командах !вызов / !gzov / !zovvv маркер упоминания теперь отображается как ❤️ вместо точки.
+
+=== 2026-10-03 ROLE/NICK/CASINO FIX ===
+- !сник and !gsnick now accept VK numeric IDs, @id123, [id123|Name], vk.com/id123 and VK screen-name tags such as @username.
+- /sysrole [ID/@tag] [priority or role name] can assign any existing role from 0 to 100; command is restricted to owner/super access.
+- When the bot is added to a conversation it reads conversation members: creator/owner receives priority 100 and chat administrators receive priority 80.
+- !админы and !staff show the same STAFF/administration list.
+- Role assignment messages include a callback button to remove the role. Nickname assignment messages include a callback button to remove the nickname.
+- Casino results include a "🎰 Повторить" callback button that repeats the same stake for the user who started the game.
