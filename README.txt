@@ -1,23 +1,87 @@
-RAZE RUSSIA VK BOT — VERIFIED FIX BUILD
+RAZE RUSSIA — VK BOT FINAL
+Build: FINAL-2026-10-03
+PHP: 8.2 CLI + PDO MySQL
 
-Build: ROLE/NICK/CASINO/FIXED-2
-Date: 2026-10-03
+В комплекте:
+- bot.php — основной бот
+- database.sql — полная схема MySQL/MariaDB, без CREATE DATABASE
+- Dockerfile — готов для Bothost
+- data/.keep — каталог для bot.log
 
-FIXES VERIFIED:
-- Added missing chatMembers() function using messages.getConversationMembers.
-- !онлайн no longer crashes with "Call to undefined function chatMembers()".
-- !онлайн counts VK online profiles only; it no longer treats every admin as online.
-- !staff is now registered in command permissions and works for ordinary chat members.
-- !админы and !staff use the same administration list.
-- BOT INVITED leadership sync uses chatMembers().
-- Added !версия / !version to verify that this build is running.
-- Existing role/nickname remove buttons and casino repeat button are preserved.
+ПЕРЕМЕННЫЕ BOTHOST:
+VK_TOKEN=ваш существующий токен
+VK_GROUP_ID=241953865
+OWNER_IDS=831772755
+TZ=Europe/Moscow
+MYSQL_HOST=80.242.59.112
+MYSQL_PORT=3306
+MYSQL_DATABASE=gs355526
+MYSQL_USER=gs355526
+MYSQL_PASSWORD=ваш существующий пароль
 
-INSTALL:
-1. Replace the project files in Bothost with this archive.
-2. Keep the existing environment variables, especially VK_TOKEN and MySQL settings.
-3. Rebuild/redeploy the container from the repository or upload this project.
-4. Restart the bot.
-5. Test in VK: !версия, !staff, !админы, !онлайн, !казино 100.
+ВАЖНО: токен и пароль в архив не записаны.
 
-Do not put VK_TOKEN or MYSQL_PASSWORD into this archive. Use Bothost environment variables.
+ОСНОВНЫЕ ФИКСЫ:
+- MySQL вместо старой SQLite-версии.
+- Автосоздание/миграция таблиц при старте.
+- Исправлен chatMembers(), поэтому !онлайн не падает.
+- !staff / !сотрудники работают.
+- !версия / !version.
+- Ответом на сообщение работают !сник, !role и /sysrole.
+- /sysrole доступна супер-доступу и принимает приоритет 0..100 или название существующей роли.
+- /sysban доступна только супер-доступу: заносит пользователя в системный бан и пытается исключить из всех известных бесед бота.
+- /sysunban снимает системный бан.
+- При повторном добавлении sysban-пользователь автоматически исключается из беседы через chat_invite_user/chat_invite_user_by_link.
+- Кнопка снятия роли.
+- Кнопка снятия ника.
+- Кнопка повторения казино.
+- Система репортов и кнопок репорта.
+- Объединения бесед и глобальные команды.
+- Предупреждения, муты, баны, кики, ники, иммунитеты.
+- Экономика, бонус, казино, переводы, топы, браки/страны.
+- Супер-доступы и диагностика ЛС.
+- Логи действий.
+
+ПРИМЕРЫ:
+!пинг
+!онлайн
+!staff
+!админы
+!версия
+
+Ответить на сообщение пользователя:
+!сник Nick_Name
+!role Модератор
+/sysrole 80
+
+Выдать системную роль конкретному ID:
+/sysrole 123456789 80
+/sysrole 123456789 Администратор
+
+Системный бан:
+/sysban 123456789
+или ответом на сообщение:
+/sysban
+
+Снять системный бан:
+/sysunban 123456789
+или ответом на сообщение:
+/sysunban
+
+ЗАПУСК:
+1. Загрузить этот комплект в Bothost/репозиторий.
+2. Не менять существующие переменные окружения.
+3. Пересобрать контейнер.
+4. Перезапустить контейнер.
+5. В VK написать !версия.
+6. Затем !пинг, !staff и !онлайн.
+
+ТРЕБОВАНИЯ VK:
+Сообщество должно иметь Long Poll API.
+Для кика из бесед бот должен быть администратором беседы с правом управления участниками.
+Для sysban бот должен уже видеть/знать беседы. Новая беседа добавляется в базу при событии приглашения бота.
+
+ЛОГ:
+/app/data/bot.log
+
+Если бот не отвечает, первым делом смотреть лог Bothost. В логах есть MYSQL CONNECTION ERROR, Long Poll errors, VK API errors и SYSBAN KICK ERROR.
