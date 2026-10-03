@@ -1,92 +1,23 @@
-RAZE RUSSIA VK BOT — IDEAL / MySQL
+RAZE RUSSIA VK BOT — VERIFIED FIX BUILD
 
-1. Импортируйте database.sql в уже созданную MySQL/MariaDB БД.
-2. Загрузите этот проект в GitHub/Bothost.
-3. В Bothost задайте:
-VK_TOKEN=токен сообщества
-VK_GROUP_ID=241953865
-OWNER_IDS=831772755
-TZ=Europe/Moscow
-MYSQL_HOST=удалённый хост MySQL
-MYSQL_PORT=3306
-MYSQL_DATABASE=имя БД
-MYSQL_USER=логин БД
-MYSQL_PASSWORD=пароль БД
-4. Перезапустите контейнер.
+Build: ROLE/NICK/CASINO/FIXED-2
+Date: 2026-10-03
 
-РЕПОРТЫ
-/report текст — создать репорт из беседы.
-Все OWNER_IDS и пользователи таблицы superusers получают уведомление в ЛС.
-!репорты — открытые/взятые репорты.
-!репорт ID — карточка.
-!диалогрепорта ID — вся история.
-!взять ID — назначить себя.
-!ответ ID текст — ответить автору в ЛС.
-!закрыть ID причина — закрыть и уведомить автора.
-!открытьрепорт ID — переоткрыть.
-!мои — ваши активные назначенные репорты.
-!суперы — супер-доступы.
-!добавитьсупер ID / !удалитьсупер ID — управление супер-доступами.
+FIXES VERIFIED:
+- Added missing chatMembers() function using messages.getConversationMembers.
+- !онлайн no longer crashes with "Call to undefined function chatMembers()".
+- !онлайн counts VK online profiles only; it no longer treats every admin as online.
+- !staff is now registered in command permissions and works for ordinary chat members.
+- !админы and !staff use the same administration list.
+- BOT INVITED leadership sync uses chatMembers().
+- Added !версия / !version to verify that this build is running.
+- Existing role/nickname remove buttons and casino repeat button are preserved.
 
-Для уведомлений репортов используются inline-кнопки. Для них включён VK message_event.
-Если VK не разрешает сообществу писать конкретному пользователю, это будет записано в data/bot.log.
+INSTALL:
+1. Replace the project files in Bothost with this archive.
+2. Keep the existing environment variables, especially VK_TOKEN and MySQL settings.
+3. Rebuild/redeploy the container from the repository or upload this project.
+4. Restart the bot.
+5. Test in VK: !версия, !staff, !админы, !онлайн, !казино 100.
 
-ВАЖНО: пароль БД хранится только в переменной окружения Bothost, не в bot.php и не в GitHub.
-
-=== ЛС СУПЕР-ДОСТУПОВ ===
-
-VK не позволяет сообществу принудительно начать диалог с пользователем, если пользователь не разрешил сообщения от сообщества.
-
-Команда владельца:
-!проверкасуперов
-
-Она показывает, каким супер-доступам бот реально может написать в ЛС.
-
-Для каждого супер-доступа:
-1. Откройте сообщения сообщества RAZE RUSSIA: чат-менеджер.
-2. Нажмите кнопку/опцию разрешения сообщений от сообщества, если VK её показывает.
-3. После этого выполните !проверкасуперов.
-
-В логах data/bot.log при новом репорте будет строка:
-REPORT #N: DM delivered X/Y
-и для заблокированного ЛС:
-REPORT #N: DM NOT ALLOWED uid=...
-
-ОБЪЕДИНЕНИЯ — НОВАЯ СИСТЕМА
-!unity [название] / !объединение [название] — создать объединение из текущей беседы.
-!listunities — список объединений.
-!unityinfo [ID] — информация и список бесед объединения.
-!addunity [ID] — добавить текущую беседу в объединение. Выполняет владелец объединения.
-!removeunity — убрать текущую беседу из объединения.
-!editunity [новое название] — переименовать объединение.
-!leaveunity — выйти текущей беседе из объединения.
-!deleteunity [ID] — удалить объединение целиком.
-
-ГЛОБАЛЬНЫЕ КОМАНДЫ ОБЪЕДИНЕНИЯ
-Работают только внутри объединения и применяются ко всем его беседам:
-!gkick [ID/@тег]
-!gsnick [ID/@тег] [ник]
-!gban [ID/@тег] [дни] [причина]
-!gunban [ID/@тег]
-!grole [ID/@тег] [приоритет]
-!гмодер [ID/@тег]
-!гпомощник [ID/@тег]
-!gzov [текст]
-!gspec [ID/@тег]
-
-ТЕГИ
-Команды с пользователем теперь принимают ответ на сообщение, [id123|Имя], @id123, @123, id123 или просто числовой ID.
-!сник @123 Новый Ник
-!gkick @123
-!gsnick @123 Новый Ник
-
-УПОМЯНАНИЯ
-В командах !вызов / !gzov / !zovvv маркер упоминания теперь отображается как ❤️ вместо точки.
-
-=== 2026-10-03 ROLE/NICK/CASINO FIX ===
-- !сник and !gsnick now accept VK numeric IDs, @id123, [id123|Name], vk.com/id123 and VK screen-name tags such as @username.
-- /sysrole [ID/@tag] [priority or role name] can assign any existing role from 0 to 100; command is restricted to owner/super access.
-- When the bot is added to a conversation it reads conversation members: creator/owner receives priority 100 and chat administrators receive priority 80.
-- !админы and !staff show the same STAFF/administration list.
-- Role assignment messages include a callback button to remove the role. Nickname assignment messages include a callback button to remove the nickname.
-- Casino results include a "🎰 Повторить" callback button that repeats the same stake for the user who started the game.
+Do not put VK_TOKEN or MYSQL_PASSWORD into this archive. Use Bothost environment variables.
