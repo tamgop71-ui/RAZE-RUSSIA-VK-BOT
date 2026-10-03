@@ -1,16 +1,21 @@
-RAZE RUSSIA VK BOT - FULL COMMAND BUILD
+RAZE RUSSIA VK BOT — KICK/BAN FIX
 
-Bothost:
-1. Upload these files to the GitHub repository connected to Bothost.
-2. Enable Use custom Dockerfile.
-3. Main file: bot.php.
-4. Rebuild from Git.
-5. Set VK_TOKEN, VK_GROUP_ID, OWNER_IDS and TZ in environment variables.
+Replace bot.php in GitHub with the new bot.php.
+Do not replace data/raze.sqlite.
+Then Bothost: Update from Git -> rebuild -> restart.
 
-IMPORTANT:
-- Do not send VK_TOKEN to anyone.
-- The bot uses Groups Long Poll, no callback URL is required.
-- messages.send intentionally does NOT send reply_to.
-- SQLite is created in /app/data/raze.sqlite and old database tables are migrated automatically.
+Important VK permission:
+The community must be an administrator of the VK conversation and have permission to manage the conversation/members. Without that VK will return an API error.
 
-The command dispatcher covers the command groups supplied by the project specification. Some VK actions (kick, delete, pin, admin changes) additionally require the community bot to have the corresponding rights in the conversation.
+Supported target formats:
+/кик 123
+!kick 123
+.kick @id123
+,kick vk.com/id123
+Reply to a user's message and send: /kick
+
+Ban:
+/бан 123 7 причина
+!ban 123 7 причина
+Reply to a user's message: /ban 7 причина
+Ban is stored in SQLite and the user is immediately removed from the VK conversation. VK does not provide a generic permanent chat-ban method through this API; the bot therefore enforces the ban in its own database.
