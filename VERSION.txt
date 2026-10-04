@@ -1,4 +1,5 @@
-RAZE RUSSIA VK BOT v5.0.0
-MySQL + VK Groups Long Poll
-VK clickable profiles + author target fallback + clean outgoing messages
-PHP 8.2+
+RAZE RUSSIA VK BOT v6.0.0
+MYSQL
+SUPER ACCESS
+REPORT SYSTEM
+ROBUST TARGET RESOLUTION
