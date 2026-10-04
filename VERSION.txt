@@ -1,4 +1,4 @@
-RAZE RUSSIA VK BOT v4.0.0
+RAZE RUSSIA VK BOT v5.0.0
 MySQL + VK Groups Long Poll
-HELP BUTTON + ROBUST COMMAND PARSER
+VK clickable profiles + author target fallback + clean outgoing messages
 PHP 8.2+
