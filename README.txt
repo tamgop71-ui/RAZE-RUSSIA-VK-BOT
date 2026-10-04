@@ -1,87 +1,24 @@
-RAZE RUSSIA — VK CHAT BOT FINAL
-================================
+RAZE RUSSIA VK BOT — FINAL BUILD
 
-Основа: PHP 8.2 + SQLite + VK Groups Long Poll.
-База: data/raze.sqlite
+Bothost / PHP 8.2 / SQLite / VK Groups Long Poll
 
-ВАЖНО
------
-1. Не удаляйте data/raze.sqlite при обновлении.
-2. VK_TOKEN, VK_GROUP_ID, OWNER_IDS и TZ задаются в переменных окружения Bothost.
-3. Токен VK в архив не входит.
-4. PHP должен иметь pdo_sqlite.
+INSTALL
+1. Replace bot.php.
+2. Do NOT delete data/raze.sqlite.
+3. Keep VK_TOKEN in Bothost environment.
+4. Keep VK_GROUP_ID=241953865, OWNER_IDS=831772755, TZ=Europe/Moscow.
 
-ЧТО ИСПРАВЛЕНО
----------------
-• /help, !help, !помощь, !команды и /команды показывают аккуратное сообщение с кнопкой «📚 Все команды».
-• Кнопка ведёт на: http://vk.ru/@-241953865-cmd
-• Создатель беседы синхронизируется как роль 100 «Владелец».
-• Администраторы VK-беседы синхронизируются как роль 80 «Ст. администратор».
-• !admin / !gadmin теперь выдают роль 80, а не 60.
-• При добавлении бота/пользователя в беседу выполняется синхронизация ролей.
-• При добавлении пользователя отправляется сохранённое !welcome, если оно задано.
-• 3 активных предупреждения снимают административную роль пользователя (кроме владельца).
-• Варны, муты, баны, кики и снятие наказаний пишутся в историю.
-• !pin и !unpin используют VK API; боту нужны права администратора беседы.
-• Исправлен alias !profile.
-• Сообщение !онлайн считает именно онлайн-пользователей.
-• SQLite сохраняется и автоматически создаёт недостающие колонки.
+CHECKED/FIXED
+- Existing command handlers retained.
+- 128 case labels, 128 unique labels.
+- No duplicate PHP functions.
+- PHP syntax passes.
+- !help / !помощь / !команды / !start use a compact button to the RAZE command post.
+- !admin / !gadmin = senior administrator role (priority 80).
+- VK chat owner/admin roles synchronize on invite events.
+- !welcome is sent when a member joins if configured.
+- !pin calls messages.pin; !unpin calls messages.unpin.
+- SQLite database is preserved.
 
-РОЛИ
-----
-0  Участник
-20 Помощник
-40 Модератор
-60 Администратор
-80 Ст. администратор
-100 Владелец
-
-ОСНОВНЫЕ КОМАНДЫ
-----------------
-Общие: !help, !пинг, !статус, !правила, !роли, !админы, !онлайн, !myid, !thereid, !report, !профиль, !бонус, !казино, !перевод, !топ, !atop, !гражданство, !страна, !страны, !брак, !развод, !браки, !поцелуй, !обнять, !попытка, !пиво.
-
-Помощник: !мут, !унмут, !кик, !пред, !варн, !унварн, !снятьпред, !предупреждения, !getwarns, !getwarn, !getban, !getmute, !warnlist, !преды, !бан, !унбан, !сник, !ник, !рник, !нлист, !безников, !вызов, !чатинфо, !reg.
-
-Модератор: !role, !removerole, !помощник, !модер, !тишина, !понику, !gzov, !gkick, !gsnick.
-
-Администратор: !gban, !gunban, !grole, !гмодер, !гпомощник, !удалить, !gm, !removegm, !gms.
-
-Ст. администратор: !pin, !unpin, !admin, !gadmin, !newrole, !gnewrole, !delrole, !welcome, !setrules, !delrules, !неактив, !givemoney, !timeuved.
-
-Владелец: !settings, !setup, !unity, !addunity, !createunity, !editunity, !removeunity, !sync, !spec, !gspec, !wipe, !games, !editcmd, !geditcmd, !gedit, !gsettings, !owner, !automod, !addws.
-
-Супер-доступ: !setlog, !zovvv, !gtimeuvedg, !gzovg, !reportedit, !getdialog, !getreport, !reports, !listunities, !listen, !chatlist, !userchats, !ahistory, !checkban.
-
-УСТАНОВКА НА BOTHOST
---------------------
-1. Остановите старую версию бота.
-2. Сделайте резервную копию data/raze.sqlite.
-3. Загрузите новый bot.php поверх старого.
-4. НЕ удаляйте папку data и файл data/raze.sqlite.
-5. Проверьте переменные окружения:
-   VK_TOKEN=токен группы
-   VK_GROUP_ID=241953865
-   OWNER_IDS=831772755
-   TZ=Europe/Moscow
-6. Запустите бота.
-7. В логах должно появиться: RAZE RUSSIA VK BOT FULL BUILD started.
-
-Проверка после запуска
-----------------------
-!пинг
-/help
-!роли
-!админы
-!myid
-!thereid
-
-Для !pin / !unpin / !кик бот должен иметь необходимые права в беседе.
-
-ПРОВЕРКА СБОРКИ
----------------
-PHP syntax: OK
-Команд с правами: 127
-Команд с обработчиками: 128 labels
-Необработанных команд: 0
-Дублирующихся функций: 0
-Живой VK API в среде сборки не запускался, поэтому финальная проверка прав VK выполняется уже на Bothost.
+LIVE LIMITATION
+The archive was statically tested here. A real VK API/Long Poll test requires the live token and Bothost runtime, so no claim of live execution is made.
