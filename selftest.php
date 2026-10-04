@@ -1,20 +1,34 @@
 <?php
 declare(strict_types=1);
-$bot=__DIR__.'/bot.php';
-$src=file_get_contents($bot);
-$ok=true;
+$bot=__DIR__.'/bot.php'; $ok=true; $src=is_file($bot)?file_get_contents($bot):'';
 function t(string $name,bool $pass):void{global $ok;echo ($pass?'[OK] ':'[FAIL] ').$name."\n";if(!$pass)$ok=false;}
 t('bot.php exists',is_file($bot));
-exec('php -l '.escapeshellarg($bot),$out,$code);t('PHP syntax', $code===0);
-t('no keyboard parameter', preg_match('/[\"\']keyboard[\"\']\s*=>/i',$src)===0);
-t('no reply_to parameter', preg_match('/[\"\']reply_to[\"\']/i',$src)===0);
-$reqPart=substr($src,strpos($src,'$req=['),strpos($src,'if(!isset($req[$cmd]))')-strpos($src,'$req=['));
-$req=array_unique(preg_match_all("/'([^']+)'\s*=>\s*\[/",$reqPart,$m)?$m[1]:[]);
-$sw=substr($src,strpos($src,'switch($cmd)'));
-$cases=preg_match_all("/case\\s*'([^']+)'/",$sw,$m2)?$m2[1]:[];
+exec('php -l '.escapeshellarg($bot),$out,$code);t('PHP syntax',$code===0);
+t('MySQL driver check',strpos($src,"extension_loaded('pdo_mysql')")!==false);
+t('no accidental SQLite driver dependency',strpos($src,"extension_loaded('pdo_sqlite')")===false);
+t('keyboard is present only for help',substr_count($src,"'keyboard'")===1);
+t('keyboard inline is boolean true',preg_match("/'inline'\s*=>\s*true/",$src)===1);
+t('help article URL is present',strpos($src,'https://vk.ru/@-241953865-cmd')!==false);
+t('no reply_to parameter',preg_match('/[\"\']reply_to[\"\']/i',$src)===0);
+t('VK API version 5.199',strpos($src, "v']='5.199")!==false);
+$reqPos=strpos($src,'$req=['); $swPos=strpos($src,'switch($cmd)');
+$reqPart=$reqPos!==false&&$swPos!==false?substr($src,$reqPos,$swPos-$reqPos):'';
+$req=preg_match_all("/'([^']+)'\s*=>\s*\[/",$reqPart,$m)?array_values(array_unique($m[1])):[];
+$sw=$swPos!==false?substr($src,$swPos):''; $cases=preg_match_all("/case\s*'([^']+)'/",$sw,$m2)?$m2[1]:[];
 t('all permission entries have handlers',count(array_diff($req,$cases))===0);
 $c=array_count_values($cases);t('no duplicate case labels',count(array_filter($c,fn($n)=>$n>1))===0);
-t('database.sql exists',is_file(__DIR__.'/database.sql'));
-$schema=file_get_contents(__DIR__.'/database.sql');
-foreach(['roles','chat_users','chat_settings','warnings','bans','mutes','logs','nicknames','reports','economy','system_roles','system_bans','system_mutes'] as $table)t('schema table '.$table,strpos($schema,'CREATE TABLE IF NOT EXISTS `'.$table.'`')!==false || strpos($schema,'CREATE TABLE IF NOT EXISTS '.$table)!==false);
+$schema=is_file(__DIR__.'/database.sql')?file_get_contents(__DIR__.'/database.sql'):'';
+foreach(['roles','chat_users','chat_settings','warnings','bans','mutes','logs','nicknames','reports','report_messages','economy','marriages','countries','unities','unity_chats','superusers','system_roles','system_bans','system_mutes','schedules','listenings','bot_meta'] as $table)t('schema table '.$table,preg_match('/CREATE TABLE IF NOT EXISTS `?'.preg_quote($table,'/').'`?/',$schema)===1);
+// Extract and test the real parser from bot.php without starting the bot.
+if(preg_match('/(function lowerText\(.*?\n\})\nfunction vk/s',$src,$m))eval($m[1]);
+if(preg_match('/(function parseCommand\(.*?\n\})\nfunction target/s',$src,$m))eval($m[1]);
+if(function_exists('parseCommand')){
+ $tests=['!help','/help','.help','!!!help','/help@club241953865','!HELP','/помощь','/ПОМОЩЬ','/пинг',' .пинг ',"!help\u{200B}",'／help','！help','．help','/ help'];
+ $want=['help','help','help','help','help','help','помощь','помощь','пинг','пинг','help','help','help','help','help'];
+ foreach($tests as $i=>$input){[$cmd,$args]=parseCommand($input);t('parser '.json_encode($input,JSON_UNESCAPED_UNICODE),$cmd===$want[$i]);}
+}else t('real command parser extracted',false);
+// Validate the exact help keyboard JSON without executing the bot.
+if(preg_match('/(function helpKeyboard\(\):string\{.*?\})\nfunction sendMessage/s',$src,$m)){
+ eval($m[1]); $kb=json_decode(helpKeyboard(),true); t('help keyboard JSON valid',is_array($kb)); t('help keyboard inline=true',isset($kb['inline'])&&$kb['inline']===true); t('help keyboard has one button',isset($kb['buttons'][0][0]['action'])); t('help button is open_link',($kb['buttons'][0][0]['action']['type']??'')==='open_link');
+}
 exit($ok?0:1);

@@ -1,20 +1,30 @@
-RAZE RUSSIA VK BOT v3.1.0 — CHECKLIST
+RAZE RUSSIA VK BOT v4.0.0 — TEST REPORT
 
-[OK] PHP syntax check
-[OK] No keyboard parameter in bot.php
-[OK] No reply_to parameter in bot.php
-[OK] Permission entries have handlers
-[OK] No duplicate case labels
-[OK] MySQL schema included
-[OK] VK token is read only from environment
-[OK] Long Poll message_new enabled by startupCheck()
-[OK] Per-update handler errors are logged instead of killing the whole Long Poll loop
+[OK] PHP syntax bot.php
+[OK] PHP syntax selftest.php
+[OK] MySQL driver check uses pdo_mysql
+[OK] no accidental SQLite dependency
+[OK] VK API 5.199
+[OK] help keyboard JSON
+[OK] keyboard inline=true (boolean, not 1)
+[OK] help article button: https://vk.ru/@-241953865-cmd
+[OK] no reply_to parameter
+[OK] permission map has handlers
+[OK] no duplicate case labels
+[OK] all required MySQL tables present in database.sql
+[OK] command parser: ! / . prefixes
+[OK] command parser: repeated prefixes
+[OK] command parser: @club/@public suffix
+[OK] command parser: upper/lower case
+[OK] command parser: Cyrillic commands
+[OK] command parser: full-width punctuation
+[OK] command parser: zero-width characters
+[OK] command parser: spaces after prefix
+[OK] reply target offsets fixed for nickname/warn/role
+[OK] online count uses online flag only
+[OK] scheduled-message errors isolated from Long Poll
 
-DEPLOY:
-[ ] Import database.sql into a fresh MySQL database
-[ ] Upload bot.php to GitHub
-[ ] Bothost branch = main
-[ ] Start command = php bot.php
-[ ] Set MYSQL_* variables in Bothost
-[ ] Set VK_TOKEN in Bothost (do not put it in GitHub)
-[ ] Restart/Rebuild container
+LIMITATION:
+Real VK API and Bothost runtime were not executed here because the private VK token/container is not available to the test environment.
+After deployment, the first startup line MUST contain:
+=== RAZE RUSSIA VK BOT v4.0.0 | MYSQL | HELP BUTTON | ROBUST COMMAND PARSER ===
