@@ -1,13 +1,20 @@
-RAZE RUSSIA BOT STATIC CHECKLIST
-[OK] PHP syntax
-[OK] 128 unique case labels
-[OK] No duplicate functions
-[OK] Help button URL present
-[OK] Admin role priority 80
-[OK] Owner role priority 100
-[OK] Chat invite action handler
-[OK] Welcome handler
-[OK] messages.pin
-[OK] messages.unpin
-[OK] SQLite preserved
-[NOT LIVE TESTED] VK API / Bothost runtime
+RAZE RUSSIA VK BOT v3.1.0 — CHECKLIST
+
+[OK] PHP syntax check
+[OK] No keyboard parameter in bot.php
+[OK] No reply_to parameter in bot.php
+[OK] Permission entries have handlers
+[OK] No duplicate case labels
+[OK] MySQL schema included
+[OK] VK token is read only from environment
+[OK] Long Poll message_new enabled by startupCheck()
+[OK] Per-update handler errors are logged instead of killing the whole Long Poll loop
+
+DEPLOY:
+[ ] Import database.sql into a fresh MySQL database
+[ ] Upload bot.php to GitHub
+[ ] Bothost branch = main
+[ ] Start command = php bot.php
+[ ] Set MYSQL_* variables in Bothost
+[ ] Set VK_TOKEN in Bothost (do not put it in GitHub)
+[ ] Restart/Rebuild container
