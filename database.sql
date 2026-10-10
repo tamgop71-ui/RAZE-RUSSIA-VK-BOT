@@ -1,27 +1,20 @@
--- RAZE RUSSIA VK BOT - MySQL 8.x
--- Import into the already-created database. No CREATE DATABASE statement.
-
-CREATE TABLE IF NOT EXISTS roles(id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,name VARCHAR(255) NOT NULL UNIQUE,priority INT NOT NULL DEFAULT 0) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS chat_users(id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,peer_id INT NOT NULL,user_id INT NOT NULL,role_id INT NOT NULL DEFAULT 1,nickname TEXT,immunity INT NOT NULL DEFAULT 0,last_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,messages INT NOT NULL DEFAULT 0,UNIQUE(peer_id,user_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS chat_settings(peer_id INT UNSIGNED NOT NULL PRIMARY KEY,rules TEXT,welcome TEXT,silence_until DATETIME,games_enabled INT NOT NULL DEFAULT 0,automod_enabled INT NOT NULL DEFAULT 0,mentions_enabled INT NOT NULL DEFAULT 1,report_notify_peer INT NOT NULL DEFAULT 0) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS warnings(id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,peer_id INT NOT NULL,user_id INT NOT NULL,moderator_id INT NOT NULL,reason TEXT NOT NULL,active INT NOT NULL DEFAULT 1,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS bans(id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,peer_id INT NOT NULL,user_id INT NOT NULL,moderator_id INT NOT NULL,days INT NOT NULL,reason TEXT NOT NULL,active INT NOT NULL DEFAULT 1,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,expires_at DATETIME) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS mutes(id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,peer_id INT NOT NULL,user_id INT NOT NULL,moderator_id INT NOT NULL,minutes INT NOT NULL,reason TEXT NOT NULL,active INT NOT NULL DEFAULT 1,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,expires_at DATETIME) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS logs(id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,peer_id INT NOT NULL,actor_id INT NOT NULL,target_id INT,action TEXT NOT NULL,details TEXT,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS nicknames(id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,peer_id INT NOT NULL,user_id INT NOT NULL,nickname VARCHAR(255) NOT NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(peer_id,user_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS reports(id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,peer_id INT NOT NULL,user_id INT NOT NULL,text TEXT NOT NULL,status VARCHAR(32) NOT NULL DEFAULT 'open',created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,assigned_to INT,closed_at TEXT) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS report_messages(id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,report_id INT NOT NULL,user_id INT NOT NULL,text TEXT NOT NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS economy(peer_id INT NOT NULL,user_id INT NOT NULL,balance INT NOT NULL DEFAULT 1500,country VARCHAR(255),partner_id INT,registered_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,last_bonus DATETIME,last_casino DATETIME,PRIMARY KEY(peer_id,user_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS marriages(peer_id INT NOT NULL,user1 INT NOT NULL,user2 INT NOT NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(peer_id,user1,user2)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS countries(peer_id INT NOT NULL,name VARCHAR(255) NOT NULL,owner_id INT NOT NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(peer_id,name)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS unities(id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,name VARCHAR(255) NOT NULL UNIQUE,owner_id INT NOT NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS unity_chats(unity_id INT NOT NULL,peer_id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS superusers(user_id INT UNSIGNED NOT NULL PRIMARY KEY,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS system_roles(user_id INT UNSIGNED NOT NULL PRIMARY KEY,priority INT NOT NULL DEFAULT 0,role_name TEXT,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS system_bans(user_id INT UNSIGNED NOT NULL PRIMARY KEY,moderator_id INT NOT NULL,days INT NOT NULL,reason TEXT NOT NULL,active INT NOT NULL DEFAULT 1,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,expires_at DATETIME) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS system_mutes(user_id INT UNSIGNED NOT NULL PRIMARY KEY,moderator_id INT NOT NULL,minutes INT NOT NULL,reason TEXT NOT NULL,active INT NOT NULL DEFAULT 1,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,expires_at DATETIME) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS schedules(id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,peer_id INT NOT NULL,owner_id INT NOT NULL,every_minutes INT NOT NULL,text TEXT NOT NULL,next_at DATETIME NOT NULL,active INT NOT NULL DEFAULT 1,global_flag INT NOT NULL DEFAULT 0) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS listenings(peer_id INT UNSIGNED NOT NULL PRIMARY KEY,owner_id INT NOT NULL,expires_at DATETIME NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE IF NOT EXISTS bot_meta(k VARCHAR(255) NOT NULL PRIMARY KEY,v TEXT) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-INSERT IGNORE INTO roles(id,name,priority) VALUES(1,'Участник',0),(2,'Помощник',20),(3,'Модератор',40),(4,'Администратор',60),(5,'Ст. администратор',80),(6,'Владелец',100);
+V7 DEPLOY CHECKLIST
+[ ] bot.php at repository root
+[ ] Dockerfile used for build (PHP 8.2 + pdo_mysql + mbstring)
+[ ] Bothost environment variables set outside GitHub
+[ ] MySQL credentials verified and database reachable
+[ ] database.sql imported for fresh installation (not required for an existing bot; runtime creates missing tables)
+[ ] logs show v7.0.0 banner
+[ ] /версия responds with v7.0.0
+[ ] /пинг responds
+[ ] /help responds
+[ ] /staff responds
+[ ] /addws tested with explicit ID, Reply and no target in a test chat
+[ ] /sysrole 80 tested (sets priority 80 for the author)
+[ ] /sysrole ID 80 and Reply /sysrole 80 tested
+[ ] /sysban and /sysunban tested on a test user
+[ ] /sysmute and /sysunmute tested on a test user
+[ ] /syskick and /sysstaff tested
+[ ] /report test created; super-access private-message permissions checked
+[ ] /reports, /взять, /ответ, /закрыть tested
+[ ] /editcmd and /geditcmd tested in a test chat
