@@ -1,0 +1,14 @@
+services:
+  raze-russia-vk-bot:
+    build: .
+    restart: unless-stopped
+    environment:
+      VK_TOKEN: ${VK_TOKEN}
+      VK_GROUP_ID: ${VK_GROUP_ID}
+      OWNER_IDS: ${OWNER_IDS}
+      VK_API_VERSION: ${VK_API_VERSION:-5.199}
+      TZ: ${TZ:-Europe/Moscow}
+      DB_PATH: /app/data/raze.sqlite
+      LONGPOLL_WAIT: ${LONGPOLL_WAIT:-25}
+    volumes:
+      - ./data:/app/data

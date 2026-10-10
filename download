@@ -1,5 +1,5 @@
-/vendor/
-/data/*.sqlite
-/data/*.sqlite-wal
-/data/*.sqlite-shm
+data/
 .env
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

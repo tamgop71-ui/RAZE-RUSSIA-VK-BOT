@@ -1,20 +1,11 @@
-V7 DEPLOY CHECKLIST
-[ ] bot.php at repository root
-[ ] Dockerfile used for build (PHP 8.2 + pdo_mysql + mbstring)
-[ ] Bothost environment variables set outside GitHub
-[ ] MySQL credentials verified and database reachable
-[ ] database.sql imported for fresh installation (not required for an existing bot; runtime creates missing tables)
-[ ] logs show v7.0.0 banner
-[ ] /версия responds with v7.0.0
-[ ] /пинг responds
-[ ] /help responds
-[ ] /staff responds
-[ ] /addws tested with explicit ID, Reply and no target in a test chat
-[ ] /sysrole 80 tested (sets priority 80 for the author)
-[ ] /sysrole ID 80 and Reply /sysrole 80 tested
-[ ] /sysban and /sysunban tested on a test user
-[ ] /sysmute and /sysunmute tested on a test user
-[ ] /syskick and /sysstaff tested
-[ ] /report test created; super-access private-message permissions checked
-[ ] /reports, /взять, /ответ, /закрыть tested
-[ ] /editcmd and /geditcmd tested in a test chat
+-- Optional schema reference for SQLite. The bot creates these tables automatically.
+-- This file is provided for documentation; it is not a MySQL import script.
+CREATE TABLE roles (user_id INTEGER PRIMARY KEY, role TEXT NOT NULL DEFAULT 'Участник', priority INTEGER NOT NULL DEFAULT 0, granted_by INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+CREATE TABLE superusers (user_id INTEGER PRIMARY KEY, granted_by INTEGER NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE warnings (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, actor_id INTEGER NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE mutes (user_id INTEGER PRIMARY KEY, actor_id INTEGER NOT NULL, reason TEXT NOT NULL, expires_at INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+CREATE TABLE bans (user_id INTEGER PRIMARY KEY, actor_id INTEGER NOT NULL, reason TEXT NOT NULL, expires_at INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+CREATE TABLE reports (id INTEGER PRIMARY KEY AUTOINCREMENT, peer_id INTEGER NOT NULL, user_id INTEGER NOT NULL, message TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', assigned_to INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, closed_at TEXT);
+CREATE TABLE nicknames (user_id INTEGER PRIMARY KEY, nickname TEXT NOT NULL, updated_by INTEGER NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, peer_id INTEGER NOT NULL DEFAULT 0, actor_id INTEGER NOT NULL, action TEXT NOT NULL, target_id INTEGER NOT NULL DEFAULT 0, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
+CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
